@@ -35,31 +35,77 @@ personal-property claims, and off-topic questions, recorded from the live UI.
   confirm action. Validation, idempotency, and ownership checks are deterministic
   code — the LLM can never authorize a write.
 
+The system overview shows the shared service used by text and voice:
+
 ```mermaid
 flowchart LR
-    UI[React chat + contextual cards + mic] -->|HTTP / SSE| API[FastAPI routes]
-    UI <-->|WebRTC| LK[LiveKit server] <--> VA[LiveKit voice agent]
-    API --> SVC[Turn service: lock + retry cache + persistence]
-    SVC --> AG[LangGraph workflow]
-    VA --> STT[Deepgram STT] --> AG
-    AG --> TTS[Deepgram TTS] --> VA
-    subgraph AG[LangGraph — single graph, chat & voice]
-        ROUTE[route] --> COV[coverage]
-        ROUTE --> STATUS[claim_status]
-        ROUTE --> SUBMIT[claim_submit]
-        ROUTE --> CONFIRM[confirm]
-        ROUTE --> CANCEL[cancel]
-        ROUTE --> CHAT[chitchat]
-    end
-    COV --> RETR[Hybrid retrieval: vector + BM25 fusion]
-    RETR --> CHROMA[(Local Chroma)]
-    RETR --> EMB[Hosted embeddings]
-    COV --> LM[Hosted LLM: intent / assess / phrase]
-    SUBMIT --> LM
-    STATUS --> CLAIMS[(Atomic JSON claims)]
-    CONFIRM --> CLAIMS
-    SVC --> DB[(SQLite: sessions / history / drafts / retry)]
+    UI["React chat, claim cards, and microphone"] -->|HTTP / SSE| API["FastAPI routes"]
+    UI <-->|WebRTC| LK["LiveKit server"]
+    LK <--> VA["LiveKit voice agent"]
+    API --> SVC["Turn service: ownership, lock, retry cache, history"]
+    VA --> STT["Deepgram STT"] --> SVC
+    SVC --> AG["Shared LangGraph workflow"]
+    SVC -->|Voice response| TTS["Deepgram TTS"] --> VA
+    SVC --> DB[("SQLite: sessions, conversations, history, drafts, retries")]
+    AG --> CP[("SQLite checkpoints: interactive chat")]
+    AG --> LM["Hosted Gemini: routing, assessment, extraction, wording"]
+    AG --> RETR["Hybrid retrieval: vector + BM25 fusion"]
+    RETR --> CHROMA[("Local Chroma")]
+    RETR --> EMB["Hosted embeddings"]
+    AG -->|Owner-scoped lookup / confirmed submission| CLAIMS[("Atomic JSON claims")]
 ```
+
+The workflow below expands the routing, claim preparation, and confirmation
+paths. Node labels summarize internal work; terminal responses return to the
+caller rather than starting another turn automatically.
+
+```mermaid
+flowchart TB
+    START(["Start turn"]) --> ROUTE["route: structured action or intent + rewritten query"]
+    ROUTE --> COV["coverage subgraph: prepare → policy_assessment<br/>clarify / offer_claim / draft_claim / compose"]
+    ROUTE --> PREP
+    ROUTE --> STATUS["claim_status: owner-scoped lookup"]
+    ROUTE --> CONFIRM["confirm: validate fields, recheck policy,<br/>then submit idempotently if eligible"]
+    ROUTE --> CANCEL["cancel: delete draft"]
+    ROUTE --> CHAT["chitchat: greeting or insurance redirect"]
+
+    COV -->|Answer, clarify, or offer a claim| DONE(["Return response"])
+    COV -->|Eligible and claim requested: delegate draft_claim| PREP
+
+    subgraph SUBMIT["claim_submit subgraph"]
+        PREP["prepare: load draft and context"] --> EXTRACT["extract_fields"]
+        PREP --> ASSESS["assess_coverage: shared policy subgraph"]
+        EXTRACT --> COMPOSE["compose: merge fields, apply coverage gate,<br/>save draft, and build review form"]
+        ASSESS --> COMPOSE
+    end
+
+    COMPOSE -->|Eligible interactive draft| PAUSE["interrupt: pause for explicit review"]
+    COMPOSE -->|Gate response or non-interactive draft| DONE
+    PAUSE -->|Command resume: confirm_submit| CONFIRM
+    PAUSE -->|Command resume: cancel_submit| CANCEL
+    CONFIRM --> DONE
+    CANCEL --> DONE
+    STATUS --> DONE
+    CHAT --> DONE
+```
+
+`policy_assessment` is a shared compiled subgraph: `rewrite_query` → `retrieve`
+→ `assess`, with `review_evidence` and bounded retrieval retries (at most three
+rounds). Missing policy evidence ends in `insufficient_evidence`; a supported
+customer-fact gap can lead to clarification. Coverage can reuse its assessment
+when delegating a draft, while direct claim requests extract fields and assess
+coverage in parallel. Confirmation reassesses the reviewed incident before any
+write. Clarifications and claim offers continue through a new customer turn.
+
+Interactive chat persists the confirmation pause in SQLite and resumes it with
+`Command(resume=...)`. The voice service passes `interactive=False`, so direct
+claim requests return drafts without pausing. Coverage-delegated drafts currently
+use the default interactive mode; that nested voice path does not yet inherit the
+flag. Submission still requires the explicit structured confirmation action.
+
+See [graph wiring](backend/app/agent/graph.py),
+[coverage and claim subgraphs](backend/app/agent/nodes.py), and
+[policy assessment](backend/app/agent/retrieval.py) for the implementation.
 
 ## Why LangGraph
 
