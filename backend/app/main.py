@@ -135,9 +135,11 @@ async def chat_stream(req: ChatRequest, owner: str = Depends(session_owner)):
         loop = asyncio.get_running_loop()
         def progress(label):
             loop.call_soon_threadsafe(queue.put_nowait, {'type': 'progress', 'label': label})
+        def token(delta):
+            loop.call_soon_threadsafe(queue.put_nowait, {'type': 'token', 'delta': delta})
         async def work():
             try:
-                result = await asyncio.to_thread(handle_chat, req, progress)
+                result = await asyncio.to_thread(handle_chat, req, progress, token)
                 await queue.put({'type': 'result', 'response': result.model_dump()})
             except Exception:
                 logger.exception('stream failed')

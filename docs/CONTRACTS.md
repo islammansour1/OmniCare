@@ -54,8 +54,13 @@ SSE frames use `data: JSON` followed by a blank line:
 
 ```json
 {"type":"progress","label":"Processing your request"}
+{"type":"token","delta":"A pipe"}
+{"type":"token","delta":" burst is covered."}
 {"type":"result","response":{"response":"...","message_type":"coverage_answer","data":{},"sources":[],"tool_calls":[],"request_id":"...","mode":"live"}}
 ```
+
+`token` frames stream the final answer text incrementally before the terminal
+`result`; clients that ignore them still receive the complete atomic card.
 
 A terminal transport error has type=error and detail. A terminal response whose
 message_type=error is also retryable. The frontend retains the original request

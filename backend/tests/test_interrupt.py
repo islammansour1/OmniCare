@@ -18,7 +18,7 @@ def _covered(**extra):
 
 
 def _claim_deps(deps):
-    deps.lm.classify_intent = Mock(return_value="claim_submit")
+    deps.lm.classify_intent = Mock(return_value=("claim_submit", ""))
     deps.lm.analyze_policy = Mock(return_value=_covered())
     deps.lm.extract_claim_fields = Mock(return_value={"claim_type": "Water Damage",
                                                       "description": "Kitchen pipe burst"})

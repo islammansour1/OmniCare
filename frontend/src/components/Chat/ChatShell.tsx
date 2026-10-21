@@ -85,6 +85,7 @@ export function ChatShell({ userId }: { userId: string }) {
               messages={chat.messages}
               isLoading={chat.isLoading || voice.isActive}
               progress={chat.progress}
+              streamText={chat.streamText}
               onSuggestion={(text) => void chat.send(text)}
               onConfirmSubmit={(draft) => void chat.confirmSubmit(draft)}
               onCancelSubmit={() => void chat.cancelSubmit()}

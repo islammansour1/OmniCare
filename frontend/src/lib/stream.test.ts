@@ -21,4 +21,15 @@ describe('stream transport', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(['data: {"type":"progress","label":"Checking"}\n\n'])));
     await expect(streamChat(payload, vi.fn())).rejects.toThrow('Connection interrupted');
   });
+  it('forwards token deltas to the token callback before the result', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response([
+      'data: {"type":"token","delta":"Hello "}\n\n',
+      'data: {"type":"token","delta":"world"}\n\n',
+      'data: {"type":"result","response":{"response":"Hello world"}}\n\n',
+    ])));
+    const tokens: string[] = [];
+    const result = await streamChat(payload, vi.fn(), (d) => tokens.push(d));
+    expect(result.response).toBe('Hello world');
+    expect(tokens).toEqual(['Hello ', 'world']);
+  });
 });

@@ -12,10 +12,13 @@ def assess_policy(
     question: str,
     history: list[dict[str, str]],
     initial_sources: list[dict[str, Any]] | None = None,
+    query: str | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     # Keep the original wording as an independent search and as the assessment
     # input. A rewrite must never erase duration, negation, amounts or corrections.
-    queries = [] if initial_sources else [question, lm.rewrite_query(question, history)]
+    # ``query`` is the route node's pre-computed rewrite (fusion); fall back to a
+    # fresh rewrite when the caller has no pre-computed query.
+    queries = [] if initial_sources else [question, query or lm.rewrite_query(question, history)]
     searched, evidence = set(), {s["id"]: s for s in (initial_sources or [])}
     analysis = None
     for round_number in range(3):

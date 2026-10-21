@@ -10,6 +10,7 @@ export function useChat(userId: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState('Loading conversation');
+  const [streamText, setStreamText] = useState('');
   const [lastFailedRequest, setLastFailedRequest] = useState<ChatRequest | null>(null);
   const busy = useRef(false);
   const selectVersion = useRef(0);
@@ -62,16 +63,16 @@ export function useChat(userId: string) {
 
   const submit = useCallback(async (payload: ChatRequest, retry = false) => {
     if (busy.current || !conversationId) return;
-    busy.current = true; setIsLoading(true); setError(null); setProgress('Connecting');
+    busy.current = true; setIsLoading(true); setError(null); setProgress('Connecting'); setStreamText('');
     // Action-driven turns (confirm/cancel) are button clicks, not typed messages,
     // so don't inject a synthetic user bubble for them.
     if (!retry && !payload.action) appendUser(payload.message);
     try {
-      const response = await streamChat(payload, setProgress);
+      const response = await streamChat(payload, setProgress, (delta) => setStreamText((t) => t + delta));
       if (response.message_type === 'error') throw new Error(response.response);
-      appendAssistant(response); setLastFailedRequest(null);
+      setStreamText(''); appendAssistant(response); setLastFailedRequest(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed.'); setLastFailedRequest(payload);
+      setStreamText(''); setError(err instanceof Error ? err.message : 'Request failed.'); setLastFailedRequest(payload);
     } finally { busy.current = false; setIsLoading(false); }
   }, [conversationId, appendUser, appendAssistant]);
 
@@ -95,6 +96,6 @@ export function useChat(userId: string) {
     }
   }, [conversationId]);
 
-  return { messages, conversations, conversationId, select, isLoading, error, progress, canRetry: !!lastFailedRequest,
+  return { messages, conversations, conversationId, select, isLoading, error, progress, streamText, canRetry: !!lastFailedRequest,
     send, confirmSubmit, cancelSubmit, retry, refresh, appendUser, appendAssistant, clear };
 }

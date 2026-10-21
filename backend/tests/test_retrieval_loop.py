@@ -62,6 +62,17 @@ def test_edited_confirmation_rechecks_incident(chat, client):
     assert len(client.deps.claims.list_claims()) == before
 
 
+def test_precomputed_query_skips_rewrite():
+    lm = SimpleNamespace(rewrite_query=Mock(side_effect=AssertionError('should not rewrite')),
+                         analyze_policy=Mock(return_value=result()))
+    rag = SimpleNamespace(retrieve=Mock(return_value=[{'id':'a'}]))
+    analysis, sources = assess_policy(lm, rag, 'original', [], query='fused query')
+    assert analysis['verdict'] == 'covered'
+    # First search keeps the original wording; the fused query replaces the rewrite.
+    assert [c.args[0] for c in rag.retrieve.call_args_list] == ['original', 'fused query']
+    lm.rewrite_query.assert_not_called()
+
+
 def test_evidence_review_expands_before_customer_clarification():
     lm = SimpleNamespace(
         rewrite_query=Mock(return_value='original'),

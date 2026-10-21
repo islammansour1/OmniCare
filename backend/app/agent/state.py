@@ -11,6 +11,9 @@ class AgentState(TypedDict, total=False):
     draft_input: dict[str, Any] | None
     history: list[dict[str, str]]
     intent: str
+    # Pre-rewritten retrieval query, computed by the route node alongside the
+    # intent so downstream retrieval never pays a second model call.
+    query: str
     result: dict[str, Any]
     # Internal channels shared by the ``coverage`` and ``claim_submit``
     # subgraphs. They are computed mid-turn and never supplied by a caller

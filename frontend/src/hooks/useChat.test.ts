@@ -22,7 +22,7 @@ describe('saved chat journeys', () => {
     expect(result.current.conversationId).toBe('c2');
     expect(result.current.messages).toHaveLength(0);
     await act(async () => { await result.current.send('Hello'); });
-    expect(api.streamChat).toHaveBeenCalledWith(expect.objectContaining({ conversation_id:'c2' }), expect.any(Function));
+    expect(api.streamChat).toHaveBeenCalledWith(expect.objectContaining({ conversation_id:'c2' }), expect.any(Function), expect.any(Function));
   });
   it('retries the same request ID without duplicating the user message', async () => {
     const { result } = renderHook(() => useChat('u1'));

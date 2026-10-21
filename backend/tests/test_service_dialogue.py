@@ -15,7 +15,7 @@ def turn(deps, message):
 
 
 def test_short_questions_reuse_evidence_and_stop_after_two_even_after_restart(deps):
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     deps.lm.analyze_policy = Mock(side_effect=[analysis(), analysis(question='Do you know the source?'), analysis(), analysis()])
     deps.rag.retrieve = Mock(wraps=deps.rag.retrieve)
     first = turn(deps,'Actual damage needs assessment')
@@ -36,7 +36,7 @@ def test_short_questions_reuse_evidence_and_stop_after_two_even_after_restart(de
 
 
 def test_resolved_claim_request_moves_to_form_without_reassessing(deps):
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     deps.lm.analyze_policy = Mock(return_value=analysis('covered', claim_requested=True))
     deps.lm.extract_claim_fields = Mock(return_value={'description':'User confirmed the cause'})
     r = turn(deps, 'Yes, that is what happened')
@@ -47,13 +47,13 @@ def test_resolved_claim_request_moves_to_form_without_reassessing(deps):
 
 
 def test_general_policy_question_does_not_open_claim_form(deps):
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     deps.lm.analyze_policy = Mock(return_value=analysis('covered', claim_requested=False))
     assert turn(deps,'General policy question')['message_type'] == 'coverage_answer'
 
 
 def test_repeated_question_stops_and_new_incident_resets_budget(deps):
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     deps.lm.analyze_policy = Mock(side_effect=[analysis(), analysis(), analysis(starts_new_incident=True)])
     assert turn(deps,'An incident')['message_type'] == 'clarification'
     assert turn(deps,'An unclear reply')['message_type'] == 'coverage_answer'
@@ -63,7 +63,7 @@ def test_repeated_question_stops_and_new_incident_resets_budget(deps):
 
 
 def test_explicit_unknown_can_stop_without_more_questions(deps):
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     deps.lm.analyze_policy = Mock(return_value=analysis(question='', needs_review=True))
     r = turn(deps,'I cannot tell what happened')
     assert r['message_type'] == 'coverage_answer'
@@ -74,7 +74,7 @@ def test_explicit_unknown_can_stop_without_more_questions(deps):
 def test_clarification_passes_review_then_final_writing_layer(deps):
     stages = []
     from types import SimpleNamespace
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     deps.lm.analyze_policy = Mock(return_value=analysis(question='Internal missing-fact question'))
     def review(*args):
         stages.append('review')
@@ -93,10 +93,20 @@ def test_clarification_passes_review_then_final_writing_layer(deps):
     assert 'Internal missing-fact' not in r['response']
 
 
+def test_route_fused_query_is_used_for_retrieval_without_rewrite(deps):
+    deps.lm.classify_intent = Mock(return_value=('coverage', 'fused query'))
+    deps.lm.analyze_policy = Mock(return_value=analysis('covered', claim_requested=False))
+    deps.lm.rewrite_query = Mock(side_effect=AssertionError('rewrite should not be called'))
+    deps.rag.retrieve = Mock(wraps=deps.rag.retrieve)
+    turn(deps, 'my pipe burst')
+    assert any(c.args[0] == 'fused query' for c in deps.rag.retrieve.call_args_list)
+    deps.lm.rewrite_query.assert_not_called()
+
+
 def test_terminal_uncertainty_keeps_policy_details_and_citations(deps):
     deps.rag.retrieve = Mock(return_value=[{'id':'sec1', 'section':'Relevant policy',
                                           'text':'Coverage terms. Relevant exclusion.'}])
-    deps.lm.classify_intent = Mock(return_value='coverage')
+    deps.lm.classify_intent = Mock(return_value=('coverage', ''))
     decision = analysis(question='Do not ask this again?', needs_review=True)
     decision['facts'] = ['Coverage terms.', 'Relevant exclusion.']
     deps.lm.analyze_policy = Mock(return_value=decision)

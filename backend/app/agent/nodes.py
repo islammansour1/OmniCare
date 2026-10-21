@@ -36,9 +36,9 @@ def build_route_node(deps: Deps) -> Any:
         if action == "cancel_submit":
             log_event("agent.route", intent="cancel_submit")
             return {"intent": "cancel"}
-        intent = deps.lm.classify_intent(state["message"], state.get("history", []))
+        intent, query = deps.lm.classify_intent(state["message"], state.get("history", []))
         log_event("agent.route", intent=intent)
-        return {"intent": intent}
+        return {"intent": intent, "query": query}
 
     return _route
 
@@ -73,7 +73,8 @@ def assess_turn(deps, state, history):
         # Reuse evidence only while it still matches the active policy exactly.
         current = {c.id: c.section + "\n" + c.text for c in deps.rag.get_chunks()}
         cached = [s for s in cached if current.get(s["id"]) == s["text"]]
-    return assess_policy(deps.lm, deps.rag, state["message"], history, initial_sources=cached)
+    return assess_policy(deps.lm, deps.rag, state["message"], history, initial_sources=cached,
+                         query=state.get("query"))
 
 
 def clarify_or_review(deps, state, analysis, sources):
@@ -146,7 +147,7 @@ def build_claim_status_node(deps: Deps) -> Any:
     def _claim_status(state: AgentState) -> dict[str, Any]:
         cid = find_referenced_claim_id(state, deps)
         if not cid:
-            query = deps.lm.rewrite_query(state["message"], state.get("history", []))
+            query = state.get("query") or deps.lm.rewrite_query(state["message"], state.get("history", []))
             candidates = deps.claims.search(query, state["owner_id"], embedder=deps.rag.embedder)
             selected = set(deps.lm.select_claims(query, candidates))
             matches = [c for c in candidates if c['claim_id'] in selected]

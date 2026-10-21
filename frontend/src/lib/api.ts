@@ -85,8 +85,12 @@ export function getVoiceToken(
   );
 }
 
-/** Stream real server progress; the completed response is one atomic card. */
-export async function streamChat(payload: ChatRequest, progress: (label: string) => void): Promise<ChatResponse> {
+/** Stream real server progress and final-answer tokens; the completed response is one atomic card. */
+export async function streamChat(
+  payload: ChatRequest,
+  progress: (label: string) => void,
+  onToken?: (delta: string) => void,
+): Promise<ChatResponse> {
   const res = await fetch(`${getBase()}/chat/stream`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });
@@ -106,6 +110,7 @@ export async function streamChat(payload: ChatRequest, progress: (label: string)
         if (!data) continue;
         const event = JSON.parse(data);
         if (event.type === 'progress') progress(event.label);
+        if (event.type === 'token') onToken?.(event.delta);
         if (event.type === 'result') return event.response as ChatResponse;
         if (event.type === 'error') throw new Error(event.detail);
       }

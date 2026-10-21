@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ChatMessage, ClaimDraft } from '../../lib/types';
 import { MessageBubble } from './MessageBubble';
+import { StreamingText } from './StreamingText';
 import { TypingIndicator } from './TypingIndicator';
 
 function latestDraftIndex(messages: ChatMessage[]): number {
@@ -13,6 +14,7 @@ export interface MessageListProps {
   messages: ChatMessage[];
   isLoading?: boolean;
   progress?: string;
+  streamText?: string;
   onSuggestion: (text: string) => void;
   onConfirmSubmit: (draft: ClaimDraft) => void;
   onCancelSubmit: () => void;
@@ -22,6 +24,7 @@ export function MessageList({
   messages,
   isLoading = false,
   progress = 'Thinking…',
+  streamText = '',
   onSuggestion,
   onConfirmSubmit,
   onCancelSubmit,
@@ -31,6 +34,12 @@ export function MessageList({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages.length, isLoading]);
+
+  // Follow the streamed text without the smooth-scroll easing (which would lag
+  // behind rapid token updates).
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [streamText.length]);
 
   const lastAction = latestDraftIndex(messages);
   return (
@@ -46,7 +55,7 @@ export function MessageList({
           onCancelSubmit={onCancelSubmit}
         />
       ))}
-      {isLoading ? <TypingIndicator label={progress} /> : null}
+      {isLoading && streamText ? <StreamingText text={streamText} /> : isLoading ? <TypingIndicator label={progress} /> : null}
       <div ref={endRef} />
     </div>
   );

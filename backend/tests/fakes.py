@@ -93,21 +93,23 @@ class FakeLanguageModel:
     def select_claims(self, query, candidates):
         return [c['claim_id'] for c in candidates]
 
-    def classify_intent(self, message: str, history: list[dict[str, str]]) -> str:
+    def classify_intent(self, message: str, history: list[dict[str, str]]) -> tuple[str, str]:
         m = message.lower()
         if _CLAIM_ID_RE.search(message):
-            return "claim_status"
-        if any(k in m for k in ("file a claim", "file claim", "submit a claim", "new claim",
-                                "make a claim", "report a claim", "i want to claim", "start a claim")):
-            return "claim_submit"
-        if any(k in m for k in ("claim status", "track", "check my claim", "where is my claim",
-                                "status of", "my claim", "my claims", "happened to my")):
-            return "claim_status"
-        if _POLICY_RE.search(message) and _DOLLAR_RE.search(message):
-            return "claim_submit"
-        if any(k in m for k in ("hi", "hello", "hey", "thanks", "thank you")) and len(m.split()) <= 4:
-            return "chitchat"
-        return "coverage"
+            intent = "claim_status"
+        elif any(k in m for k in ("file a claim", "file claim", "submit a claim", "new claim",
+                                  "make a claim", "report a claim", "i want to claim", "start a claim")):
+            intent = "claim_submit"
+        elif any(k in m for k in ("claim status", "track", "check my claim", "where is my claim",
+                                  "status of", "my claim", "my claims", "happened to my")):
+            intent = "claim_status"
+        elif _POLICY_RE.search(message) and _DOLLAR_RE.search(message):
+            intent = "claim_submit"
+        elif any(k in m for k in ("hi", "hello", "hey", "thanks", "thank you")) and len(m.split()) <= 4:
+            intent = "chitchat"
+        else:
+            intent = "coverage"
+        return intent, self.rewrite_query(message, history)
 
     def extract_claim_id(self, message: str) -> str | None:
         m = _CLAIM_ID_RE.search(message)
