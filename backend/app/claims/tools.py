@@ -50,11 +50,11 @@ class SubmitClaimInput(BaseModel):
         return round(float(v), 2)
 
 
-def get_claim_status(claim_id: str) -> dict[str, Any]:
+def get_claim_status(claim_id: str, owner_id: str) -> dict[str, Any]:
     """Return the claim for ``claim_id`` or raise ClaimNotFoundError."""
     if not _CLAIM_ID_RE.match(claim_id or ""):
         raise InvalidClaimError(f"invalid claim id: {claim_id!r}")
-    return claims_store.get_claim_status(claim_id)
+    return claims_store.get_claim_status(claim_id, owner_id)
 
 
 def submit_claim(
@@ -62,6 +62,7 @@ def submit_claim(
     claim_type: str,
     amount: float,
     description: str,
+    owner_id: str,
 ) -> dict[str, Any]:
     """Validate and append a claim, returning the persisted record.
 
@@ -78,6 +79,7 @@ def submit_claim(
         validated.claim_type,
         validated.amount,
         validated.description,
+        owner_id,
     )
 
 

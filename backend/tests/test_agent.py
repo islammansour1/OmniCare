@@ -85,7 +85,7 @@ def test_full_info_without_action_does_not_submit(chat, client):
     assert r["data"]["confirm_required"] is True
     assert r["data"]["missing_fields"] == []
     # No claim was created without an explicit confirm action.
-    assert len(client.deps.claims.list_claims()) == 2
+    assert len(client.deps.claims.list_claims()) == 0
 
 
 def test_confirmation_executes_exactly_once(chat, client):
@@ -96,13 +96,13 @@ def test_confirmation_executes_exactly_once(chat, client):
     assert c1["message_type"] == "claim_confirmation"
     claim_id = c1["data"]["claim"]["claim_id"]
     assert claim_id.startswith("CLM-")
-    assert len(client.deps.claims.list_claims()) == 3  # 2 sample + 1 new
+    assert len(client.deps.claims.list_claims()) == 1  # only the new claim
 
     # Replay the same confirmation (draft is now gone) -> same id, no duplicate.
     c2 = chat("u1", "Confirm", action="confirm_submit", draft=draft)
     assert c2["message_type"] == "claim_confirmation"
     assert c2["data"]["claim"]["claim_id"] == claim_id
-    assert len(client.deps.claims.list_claims()) == 3
+    assert len(client.deps.claims.list_claims()) == 1
 
 
 def test_greeting(chat):

@@ -84,9 +84,9 @@ class ClaimsStore:
                 return c
         return None
 
-    def get_claim_status(self, claim_id: str, owner_id: str | None = None) -> dict[str, Any]:
+    def get_claim_status(self, claim_id: str, owner_id: str) -> dict[str, Any]:
         claim = self.get(claim_id)
-        if claim is None or (owner_id is not None and not self.visible_to(claim, owner_id)):
+        if claim is None or not self.visible_to(claim, owner_id):
             raise ClaimNotFoundError(claim_id)
         return claim
 
@@ -96,7 +96,7 @@ class ClaimsStore:
         claim_type: str,
         amount: float,
         description: str,
-        owner_id: str | None = None,
+        owner_id: str,
     ) -> dict[str, Any]:
         """Append a new claim with a deterministic, idempotent claim id."""
         idem_key = self.idempotency_key(policy_number, claim_type, amount, description, owner_id)
@@ -117,7 +117,7 @@ class ClaimsStore:
                 "amount": float(amount),
                 "description": description,
                 "idempotency_key": idem_key,
-                **({"owner_id": owner_id} if owner_id else {}),
+                "owner_id": owner_id,
             }
             claims.append(new_claim)
             self._write(claims)
@@ -126,9 +126,10 @@ class ClaimsStore:
 
     @staticmethod
     def visible_to(claim: dict, owner_id: str) -> bool:
-        # Only the two assessment fixtures are public sample records.
-        return claim.get("owner_id") == owner_id or (
-            not claim.get("owner_id") and claim.get("claim_id") in {"CLM-8821", "CLM-9014"})
+        # Strict per-owner scoping: a claim is visible only to its owner. Both
+        # owner-less lookups and owner-less records fail closed, so no record can
+        # ever leak to an anonymous or foreign session.
+        return bool(owner_id) and claim.get("owner_id") == owner_id
 
     def search(self, query: str, owner_id: str, *, embedder, limit: int = 20) -> list[dict]:
         """Semantic candidate ranking. Filter ownership BEFORE embedding or model use.
@@ -166,7 +167,7 @@ class ClaimsStore:
 
     @staticmethod
     def idempotency_key(
-        policy_number: str, claim_type: str, amount: float, description: str, owner_id: str | None = None
+        policy_number: str, claim_type: str, amount: float, description: str, owner_id: str
     ) -> str:
         normalized = "|".join(
             [
@@ -176,8 +177,7 @@ class ClaimsStore:
                 description.strip().lower(),
             ]
         )
-        if owner_id:
-            normalized = owner_id + "|" + normalized
+        normalized = owner_id + "|" + normalized
         return "idem_" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod

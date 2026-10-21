@@ -52,7 +52,7 @@ def build_graph(deps: Deps, checkpointer=None, interactive: bool = True):
     builder = StateGraph(AgentState, input_schema=AgentInput)
     builder.add_node("route", build_route_node(deps))
     builder.add_node("coverage", build_coverage_node(deps))
-    builder.add_node("claim_status", build_claim_status_node(deps))
+    builder.add_node("claim_status", build_claim_status_node(deps, interactive=interactive))
     builder.add_node("claim_submit", build_claim_submit_node(deps, interactive=interactive))
     builder.add_node("confirm", build_confirm_node(deps))
     builder.add_node("cancel", build_cancel_node(deps))

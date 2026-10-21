@@ -143,7 +143,7 @@ def find_referenced_claim_id(state: AgentState, deps: Deps) -> str | None:
     return deps.lm.resolve_claim_id(state["message"], state.get("history", []))
 
 
-def build_claim_status_node(deps: Deps) -> Any:
+def build_claim_status_node(deps: Deps, interactive: bool = True) -> Any:
     def _claim_status(state: AgentState) -> dict[str, Any]:
         cid = find_referenced_claim_id(state, deps)
         if not cid:
@@ -151,6 +151,28 @@ def build_claim_status_node(deps: Deps) -> Any:
             candidates = deps.claims.search(query, state["owner_id"], embedder=deps.rag.embedder)
             selected = set(deps.lm.select_claims(query, candidates))
             matches = [c for c in candidates if c['claim_id'] in selected]
+            if not interactive:
+                # Voice path: speak a summary instead of a "select one" picker.
+                if not matches:
+                    return {"result": build_response(
+                        response="I couldn't find a matching claim.",
+                        message_type="chat", data={"claims": []},
+                        tool_calls=[{"name": "search_claims", "arguments": {"query": state["message"]},
+                                     "result": matches}])}
+                if len(matches) == 1:
+                    c = matches[0]
+                    response = f"Claim {c['claim_id']} is {c['status'].lower()} — {c['claim_type']} for {c['policy_number']} ({c['amount']:.2f})."
+                    return {"result": build_response(
+                        response=response,
+                        message_type="claim_status", data={"claim": c},
+                        tool_calls=[{"name": "get_claim_status", "arguments": {"claim_id": c["claim_id"]},
+                                     "result": c}])}
+                response = f"I found {len(matches)} claims. " + " ".join(f"Claim {c['claim_id']} is {c['status'].lower()}." for c in matches)
+                return {"result": build_response(
+                    response=response,
+                    message_type="chat", data={"claims": matches},
+                    tool_calls=[{"name": "search_claims", "arguments": {"query": state["message"]},
+                                 "result": matches}])}
             return {"result": build_response(
                 response="Here are the matching claims. Select one to see its status." if matches else "I couldn't find a matching claim in this session. Try a different description or a claim ID.",
                 message_type="claim_list", data={"claims": matches},
