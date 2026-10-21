@@ -1,0 +1,53 @@
+# =============================================================
+# OmniCare AI — environment configuration
+# Copy to `.env` and fill in the free-tier credentials you want.
+# The app boots without any of these. Chat/RAG/voice run in a
+# clearly-labeled deterministic "demo" mode until you configure
+# hosted providers.
+# =============================================================
+
+# --- Mode -------------------------------------------------------------
+# OMNICARE_MODE: "auto" (default), "demo", or "live".
+#   auto  -> live when a hosted LLM key is present, otherwise demo.
+#   demo  -> force deterministic demo mode (no network inference).
+#   live  -> require a hosted LLM key; report an error if missing.
+# Demo mode is a clearly-labeled, weight-free (non-inference) fallback so the
+# app boots and is fully walkable with no credentials.
+OMNICARE_MODE=auto
+
+# --- LLM (OpenAI-compatible; covers OpenAI, Groq, DeepSeek, Together, ...) ---
+# Leave OPENAI_API_KEY empty to disable the LLM provider.
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o-mini
+# Alternative: an Anthropic key (used only if OPENAI_API_KEY is unset)
+# ANTHROPIC_API_KEY=
+
+# --- Embeddings (OpenAI-compatible endpoint) -----------------------------
+EMBEDDING_MODEL=text-embedding-3-small
+# Reuses OPENAI_API_KEY / OPENAI_BASE_URL by default.
+# EMBEDDING_API_KEY=
+# EMBEDDING_BASE_URL=
+
+# --- Speech-to-text (Deepgram; has a free tier) --------------------------
+DEEPGRAM_API_KEY=
+
+# --- Text-to-speech ------------------------------------------------------
+# Provider: "openai" (tts-1) or "deepgram" (aura-2). Defaults to openai.
+TTS_PROVIDER=openai
+TTS_VOICE=alloy
+TTS_MODEL=tts-1
+
+# --- Server ---------------------------------------------------------------
+HOST=0.0.0.0
+PORT=8000
+# SQLite DB file path (relative to backend/)
+DATABASE_PATH=./data/omnicare.db
+# Claims JSON store path (relative to backend/)
+CLAIMS_PATH=./data/mock_claims.json
+# Policy document path (relative to backend/)
+POLICY_PATH=../sample_policy.md
+# Chroma persistence directory (relative to backend/)
+CHROMA_PATH=./data/chroma
+# CORS origins (comma separated)
+CORS_ORIGINS=http://localhost:5173,http://localhost:3000

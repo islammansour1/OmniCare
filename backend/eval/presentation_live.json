@@ -1,0 +1,9 @@
+[
+  {
+    "case": "sink-tone",
+    "expected": "excluded",
+    "actual": "excluded",
+    "passed": true,
+    "response": "I understand that your sink has been leaking for a while and has damaged your floor. Under your policy terms, water damage is only covered in cases of sudden pipe bursts, while gradual leaks are strictly excluded. Because this damage resulted from a leak over time, it cannot be covered under the policy."
+  }
+]

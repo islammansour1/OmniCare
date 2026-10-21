@@ -1,0 +1,8 @@
+{
+  "$schema": "https://langgraph.com/langgraph.json",
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./studio.py:graph"
+  },
+  "env": "../.env"
+}

@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    # Load the Gemini configuration. Hosted credentials are required at startup.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      # Persistence for SQLite / Chroma / claims (seeded from the image on first run).
+      - backend_data:/app/data
+      # The policy document resolves to /sample_policy.md (default POLICY_PATH is
+      # "../sample_policy.md" relative to the backend package dir = /app).
+      - ./sample_policy.md:/sample_policy.md:ro
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_data:

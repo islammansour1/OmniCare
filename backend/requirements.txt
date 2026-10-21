@@ -1,0 +1,28 @@
+# OmniCare AI backend — runtime dependencies
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3
+pydantic-settings>=2.3,<3
+python-dotenv>=1.0,<2
+
+# Agent orchestration
+langgraph>=1.0,<2.0
+
+# Hosted inference clients
+openai>=1.40,<2
+
+# Gemini (native, via LangChain)
+langchain-google-genai>=4.0,<5
+
+# Local storage (NOT inference)
+chromadb>=0.5.5,<1.0
+# Pin posthog to a version whose module-level capture() API chromadb uses.
+posthog>=2.4.0,<6
+numpy>=1.26,<3
+filelock>=3.13,<4
+
+# Voice transport
+websockets>=12.0,<15
+
+# HTTP
+httpx>=0.27,<1

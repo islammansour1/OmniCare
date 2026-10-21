@@ -1,0 +1,32 @@
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtualenv (large, host-specific)
+.venv/
+venv/
+
+# Tests and dev tooling (not needed at runtime)
+tests/
+pytest.ini
+requirements-dev.txt
+
+# Runtime-generated data — seeded fresh at first run.
+# Keep `data/mock_claims.json`: it is the seed claims database.
+data/*.db
+data/*.db-*
+data/chroma/
+data/mock_claims.json.lock
+
+# OS / editor noise
+.DS_Store
+
+.env
+.env.*
+!.env.example

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment / secrets
+.env
+.env.*
+
+# Data (generated at runtime)
+backend/data/*.db
+backend/data/*.db-*
+backend/data/chroma/
+backend/data/mock_claims.json.lock
+backend/data/*.tmp
+
+# LangGraph Studio local dev server state
+backend/.langgraph_api/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Temp
+*.log
+.tmp_*

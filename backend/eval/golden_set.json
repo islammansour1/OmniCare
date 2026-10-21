@@ -1,0 +1,183 @@
+[
+  {
+    "id": "cov_water_burst",
+    "category": "covered",
+    "query": "Does my policy cover burst pipes?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "cov_water_burst_paraphrase",
+    "category": "covered (paraphrase)",
+    "query": "My pipes broke suddenly \u2014 am I covered?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "excl_gradual_leak",
+    "category": "excluded",
+    "query": "Is a slow gradual leak covered?",
+    "expected_verdict": "excluded",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "excl_gradual_paraphrase",
+    "category": "excluded (paraphrase)",
+    "query": "Water leaked slowly for months",
+    "expected_verdict": "excluded",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "excl_flood",
+    "category": "excluded",
+    "query": "Does my policy cover flood damage?",
+    "expected_verdict": "excluded",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "pp_laptop",
+    "category": "personal property",
+    "query": "Is my laptop covered?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "pp_furniture",
+    "category": "personal property",
+    "query": "Is my furniture covered?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "pp_electronics",
+    "category": "personal property",
+    "query": "Does my policy cover electronics?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "pp_tv_paraphrase",
+    "category": "personal property (paraphrase)",
+    "query": "My TV got ruined",
+    "expected_verdict": "uncertain",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "cond_engagement_ring",
+    "category": "conditional",
+    "query": "Is my $5,000 engagement ring covered?",
+    "expected_verdict": "conditional",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "cond_diamond_necklace",
+    "category": "conditional",
+    "query": "I have a diamond necklace worth $3,000 \u2014 is it covered?",
+    "expected_verdict": "conditional",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "unsup_earthquake",
+    "category": "unsupported",
+    "query": "Does my policy cover earthquakes?",
+    "expected_verdict": "unsupported",
+    "expected_section_id": null
+  },
+  {
+    "id": "unsup_car",
+    "category": "unsupported",
+    "query": "Is my car covered?",
+    "expected_verdict": "unsupported",
+    "expected_section_id": null
+  },
+  {
+    "id": "unsup_fire",
+    "category": "unsupported",
+    "query": "Is fire damage covered?",
+    "expected_verdict": "unsupported",
+    "expected_section_id": null
+  },
+  {
+    "id": "unsup_mold",
+    "category": "unsupported",
+    "query": "Does my policy cover mold?",
+    "expected_verdict": "unsupported",
+    "expected_section_id": null
+  },
+  {
+    "id": "unsup_theft",
+    "category": "unsupported",
+    "query": "Does my policy cover theft?",
+    "expected_verdict": "unsupported",
+    "expected_section_id": null
+  },
+  {
+    "id": "mixed_flood_laptop",
+    "category": "regression",
+    "query": "My laptop was damaged in a flood. Is it covered?",
+    "expected_verdict": "excluded",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "ambiguous_water",
+    "category": "regression",
+    "query": "I have water damage. Am I covered?",
+    "expected_verdict": "uncertain",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "unknown_laptop_cause",
+    "category": "regression",
+    "query": "My laptop was destroyed, is it covered?",
+    "expected_verdict": "uncertain",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "below_appraisal",
+    "category": "regression",
+    "query": "Is my jewelry worth $2,000 covered?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "at_appraisal",
+    "category": "regression",
+    "query": "Is my jewelry worth $2,500 covered?",
+    "expected_verdict": "covered",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "over_appraisal",
+    "category": "regression",
+    "query": "Is my jewelry worth $2,501 covered?",
+    "expected_verdict": "conditional",
+    "expected_section_id": "sec2"
+  },
+  {
+    "id": "negated_burst",
+    "category": "regression",
+    "query": "The water damage was not caused by a pipe burst. Am I covered?",
+    "expected_verdict": "uncertain",
+    "expected_section_id": "sec1"
+  },
+  {
+    "id": "unmentioned_peril",
+    "category": "regression",
+    "query": "Does my policy cover hurricanes?",
+    "expected_verdict": "unsupported",
+    "expected_section_id": null
+  },
+  {
+    "id": "followup_deductible",
+    "category": "follow-up",
+    "query": "What is the deductible for that?",
+    "history": [
+      {
+        "role": "user",
+        "content": "Does my policy cover burst pipes?"
+      }
+    ],
+    "expected_verdict": "covered",
+    "expected_section_id": "sec1"
+  }
+]

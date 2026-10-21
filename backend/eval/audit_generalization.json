@@ -1,0 +1,181 @@
+{
+  "metrics": {
+    "errors": 0,
+    "top_k": 1,
+    "total": 8,
+    "supported": 7,
+    "recall_at_k": 1.0,
+    "verdict_accuracy": 1.0,
+    "citation_validity": 1.0,
+    "unsupported_total": 1,
+    "unsupported_handling": 1.0
+  },
+  "per_case": [
+    {
+      "id": "transit_paraphrase",
+      "query": "The rented lighting rig was struck while being delivered. Is this covered?",
+      "error": null,
+      "elapsed_ms": 3542,
+      "expected_verdict": "covered",
+      "expected_section_id": "sec1",
+      "verdict": "covered",
+      "retrieved_ids": [
+        "sec1",
+        "sec3",
+        "sec2",
+        "sec4"
+      ],
+      "cited_ids": [
+        "sec1"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "new_limit",
+      "query": "What is the coverage limit for accidental impact to lighting equipment in transit?",
+      "error": null,
+      "elapsed_ms": 4251,
+      "expected_verdict": "covered",
+      "expected_section_id": "sec1",
+      "verdict": "covered",
+      "retrieved_ids": [
+        "sec1",
+        "sec2",
+        "sec3",
+        "sec4"
+      ],
+      "cited_ids": [
+        "sec1"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "new_exclusion",
+      "query": "The rented lighting equipment was damaged after being left outside unattended. Is it covered?",
+      "error": null,
+      "elapsed_ms": 3714,
+      "expected_verdict": "excluded",
+      "expected_section_id": "sec1",
+      "verdict": "excluded",
+      "retrieved_ids": [
+        "sec1",
+        "sec3",
+        "sec2",
+        "sec4"
+      ],
+      "cited_ids": [
+        "sec1"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "nonfinancial_condition",
+      "query": "Our rented speakers were stolen; we have not yet submitted a police report. Is coverage conditional?",
+      "error": null,
+      "elapsed_ms": 5359,
+      "expected_verdict": "conditional",
+      "expected_section_id": "sec2",
+      "verdict": "conditional",
+      "retrieved_ids": [
+        "sec2",
+        "sec3",
+        "sec1",
+        "sec4"
+      ],
+      "cited_ids": [
+        "sec2"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "misplacement",
+      "query": "We misplaced the rented sound equipment. Is that covered?",
+      "error": null,
+      "elapsed_ms": 4046,
+      "expected_verdict": "excluded",
+      "expected_section_id": "sec2",
+      "verdict": "excluded",
+      "retrieved_ids": [
+        "sec2",
+        "sec3",
+        "sec1",
+        "sec4"
+      ],
+      "cited_ids": [
+        "sec2"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "permit_condition",
+      "query": "Will you cover weather damage to rented projection screens if we still need to establish whether the organizer had a permit?",
+      "error": null,
+      "elapsed_ms": 6622,
+      "expected_verdict": "conditional",
+      "expected_section_id": "sec3",
+      "verdict": "conditional",
+      "retrieved_ids": [
+        "sec3",
+        "sec1",
+        "sec2",
+        "sec4"
+      ],
+      "cited_ids": [
+        "sec3"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "electrical_failure",
+      "query": "The hired generator suffered an internal electrical fault. Is it covered?",
+      "error": null,
+      "elapsed_ms": 16532,
+      "expected_verdict": "covered",
+      "expected_section_id": "sec4",
+      "verdict": "covered",
+      "retrieved_ids": [
+        "sec4",
+        "sec1",
+        "sec3",
+        "sec2"
+      ],
+      "cited_ids": [
+        "sec4"
+      ],
+      "recall": true,
+      "verdict_correct": true,
+      "citation_correct": true
+    },
+    {
+      "id": "unknown_category",
+      "query": "Does this policy cover cancellation of a performer's flight?",
+      "error": null,
+      "elapsed_ms": 3927,
+      "expected_verdict": "unsupported",
+      "expected_section_id": null,
+      "verdict": "unsupported",
+      "retrieved_ids": [
+        "sec2",
+        "sec3",
+        "sec4",
+        "sec1"
+      ],
+      "cited_ids": [],
+      "recall": null,
+      "verdict_correct": true,
+      "citation_correct": true
+    }
+  ]
+}

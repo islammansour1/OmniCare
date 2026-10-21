@@ -1,0 +1,8 @@
+{
+  "type": "clarification",
+  "response": "I'm so sorry to hear about the damage to your floor from the sink issue. To help us understand what happened, did the water come from a sudden pipe burst, or did it develop from a slow, gradual leak over time, or are you not quite sure?",
+  "stages": [
+    "evidence_review",
+    "clarification_composer"
+  ]
+}

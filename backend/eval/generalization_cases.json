@@ -1,0 +1,10 @@
+[
+ {"id":"transit_paraphrase","query":"The rented lighting rig was struck while being delivered. Is this covered?","expected_verdict":"covered","expected_section_id":"sec1"},
+ {"id":"new_limit","query":"What is the coverage limit for accidental impact to lighting equipment in transit?","expected_verdict":"covered","expected_section_id":"sec1"},
+ {"id":"new_exclusion","query":"The rented lighting equipment was damaged after being left outside unattended. Is it covered?","expected_verdict":"excluded","expected_section_id":"sec1"},
+ {"id":"nonfinancial_condition","query":"Our rented speakers were stolen; we have not yet submitted a police report. Is coverage conditional?","expected_verdict":"conditional","expected_section_id":"sec2"},
+ {"id":"misplacement","query":"We misplaced the rented sound equipment. Is that covered?","expected_verdict":"excluded","expected_section_id":"sec2"},
+ {"id":"permit_condition","query":"Will you cover weather damage to rented projection screens if we still need to establish whether the organizer had a permit?","expected_verdict":"conditional","expected_section_id":"sec3"},
+ {"id":"electrical_failure","query":"The hired generator suffered an internal electrical fault. Is it covered?","expected_verdict":"covered","expected_section_id":"sec4"},
+ {"id":"unknown_category","query":"Does this policy cover cancellation of a performer's flight?","expected_verdict":"unsupported","expected_section_id":null}
+]
