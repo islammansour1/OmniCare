@@ -142,15 +142,21 @@ class GeminiLanguageModel:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         self.model = settings.llm_model_resolved
+        # Gemini 3+ models "think" by default, spending thousands of hidden
+        # reasoning tokens (and seconds of wall time) before every answer. These
+        # calls are well-scoped structured outputs and short prose, so pin the
+        # lowest reasoning depth to keep turns fast.
         self._llm = ChatGoogleGenerativeAI(
             model=self.model,
             google_api_key=settings.llm_api_key_resolved,
             temperature=0,
+            thinking_level="low",
         )
         self._llm_text = ChatGoogleGenerativeAI(
             model=self.model,
             google_api_key=settings.llm_api_key_resolved,
             temperature=0.2,
+            thinking_level="low",
         )
 
     def _tool_call(
