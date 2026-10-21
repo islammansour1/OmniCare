@@ -95,3 +95,20 @@ def test_incomplete_policy_evidence_does_not_become_a_customer_question():
     analysis, _ = assess_policy(lm, rag, 'original', [])
     assert analysis['needs_review']
     assert lm.analyze_policy.call_count == 1
+
+
+def test_user_clarification_survives_exhausted_review_search():
+    # A user-facing question must not be discarded when document search is
+    # exhausted: the remaining gap is a user fact, not a document gap.
+    lm = SimpleNamespace(
+        rewrite_query=Mock(return_value='original'),
+        analyze_policy=Mock(return_value=dict(
+            verdict='uncertain', facts=['source evidence'], cited_ids=['a'],
+            clarification='What caused the damage?', search_queries=[])),
+        review_evidence=Mock(return_value=SimpleNamespace(sufficient=False, search_queries=['missing clause'])))
+    rag = SimpleNamespace(retrieve=Mock(return_value=[{'id':'a'}]))  # no new evidence
+    analysis, _ = assess_policy(lm, rag, 'original', [])
+    assert analysis['clarification'] == 'What caused the damage?'
+    assert analysis['needs_review'] is False
+    assert analysis['verdict'] == 'uncertain'
+    assert lm.review_evidence.call_count == 1

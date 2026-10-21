@@ -51,9 +51,17 @@ def assess_policy(
     # The model explicitly requested missing evidence, but no further evidence
     # could be found within the budget. Never promote its provisional verdict.
     analysis = dict(analysis or {})
-    analysis.update(verdict='uncertain' if analysis.get('facts') else 'unsupported',
-                    clarification='I could not find enough policy evidence to resolve this. A policy review is needed.',
-                    search_queries=[], needs_review=True)
+    if analysis.get("clarification"):
+        # The remaining gap is a user fact, not a document gap: keep the model's
+        # question and ask it, instead of discarding it for a generic review.
+        analysis.update(verdict="uncertain", search_queries=[], needs_review=False)
+    else:
+        analysis.update(
+            verdict="uncertain" if analysis.get("facts") else "unsupported",
+            clarification="I could not find enough policy evidence to resolve this. A policy review is needed.",
+            search_queries=[],
+            needs_review=True,
+        )
     analysis.setdefault('facts', [])
     analysis.setdefault('cited_ids', [])
     return analysis, list(evidence.values())
