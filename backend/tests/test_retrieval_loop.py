@@ -46,7 +46,7 @@ def test_extraction_cannot_remove_original_facts_or_skip_gate(deps):
     deps.lm.rewrite_query = Mock(return_value='water damage')
     deps.lm.analyze_policy = Mock(return_value=result('excluded'))
     message = 'My sink has been leaking for a while and it distroyed my home I need it fixed by your money'
-    response = build_claim_submit_node(deps)({'user_id':'test','owner_id':'test','message':message,'history':[]})['result']
+    response = build_claim_submit_node(deps).invoke({'user_id':'test','owner_id':'test','message':message,'history':[]})['result']
     assert response['message_type'] == 'coverage_answer'
     assert response['data']['verdict'] == 'excluded'
     assert deps.lm.analyze_policy.call_args.args[0] == message

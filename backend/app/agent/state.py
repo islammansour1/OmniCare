@@ -12,6 +12,14 @@ class AgentState(TypedDict, total=False):
     history: list[dict[str, str]]
     intent: str
     result: dict[str, Any]
+    # Internal channels shared by the ``coverage`` and ``claim_submit``
+    # subgraphs. They are computed mid-turn and never supplied by a caller
+    # (``AgentInput`` below excludes them, so Studio's input form ignores them).
+    assessment: dict[str, Any] | None
+    sources: list[dict[str, Any]]
+    context: list[dict[str, str]]
+    existing: dict[str, Any] | None
+    extracted: dict[str, Any] | None
 
 
 class AgentInput(TypedDict):

@@ -8,7 +8,7 @@ def test_coverage_uses_presentation_without_changing_verdict_or_sources(deps):
     deps.lm.analyze_policy = Mock(return_value=dict(verdict='excluded', facts=['Exact evidence.'],
                                                    cited_ids=['sec1'], clarification=''))
     deps.lm.compose_answer = Mock(return_value='I am sorry about the damaged floor. This policy excludes that cause.')
-    r = build_coverage_node(deps)({'user_id':'presentation','message':'My floor is damaged','history':[]})['result']
+    r = build_coverage_node(deps).invoke({'user_id':'presentation','message':'My floor is damaged','history':[]})['result']
     assert r['response'] == deps.lm.compose_answer.return_value
     assert r['data']['answer'] == r['response']
     assert r['data']['verdict'] == 'excluded'

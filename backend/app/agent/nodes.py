@@ -1,7 +1,7 @@
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from langgraph.types import interrupt
+from langgraph.graph import END, START, StateGraph
+from langgraph.types import Send, interrupt
 
 from ..claims import ClaimNotFoundError, InvalidClaimError
 from ..claims.tools import SubmitClaimInput
@@ -100,13 +100,20 @@ def clarify_or_review(deps, state, analysis, sources):
 
 
 def build_coverage_node(deps: Deps) -> Any:
-    def _coverage(state: AgentState) -> dict[str, Any]:
-        question = state["message"]
+    builder = StateGraph(AgentState)
+
+    def _assess(state: AgentState) -> dict[str, Any]:
         analysis, sources = assess_turn(deps, state, state.get("history", []))
+        return {"assessment": analysis, "sources": sources}
+
+    def _compose(state: AgentState) -> dict[str, Any]:
+        question = state["message"]
+        analysis = state["assessment"]
+        sources = state["sources"]
         if analysis["verdict"] == "uncertain":
             return {"result": clarify_or_review(deps, state, analysis, sources)}
         if analysis["verdict"] in ("covered", "conditional") and analysis.get("claim_requested"):
-            return build_claim_submit_node(deps, assessment=(analysis, sources))(state)
+            return build_claim_submit_node(deps, assessment=(analysis, sources)).invoke(state)
         verdict = analysis["verdict"]
         facts = analysis["facts"]
         cited_ids = set(analysis["cited_ids"])
@@ -123,7 +130,12 @@ def build_coverage_node(deps: Deps) -> Any:
             )
         }
 
-    return _coverage
+    builder.add_node("assess", _assess)
+    builder.add_node("compose", _compose)
+    builder.add_edge(START, "assess")
+    builder.add_edge("assess", "compose")
+    builder.add_edge("compose", END)
+    return builder.compile(name="coverage")
 
 
 def find_referenced_claim_id(state: AgentState, deps: Deps) -> str | None:
@@ -214,7 +226,9 @@ def check_coverage_gate(
 
 
 def build_claim_submit_node(deps: Deps, assessment=None, interactive: bool = True) -> Any:
-    def _claim_submit(state: AgentState) -> dict[str, Any]:
+    builder = StateGraph(AgentState)
+
+    def _prepare(state: AgentState) -> dict[str, Any]:
         user_id = state["user_id"]
         existing = deps.db.load_draft(user_id) or ClaimDraft()
         # Assess the original message even if extraction misses fields. The
@@ -222,33 +236,40 @@ def build_claim_submit_node(deps: Deps, assessment=None, interactive: bool = Tru
         context = list(state.get("history", []))
         if existing.description:
             context.append({"role": "assistant", "content": "Existing draft description (may be corrected by latest message): " + existing.description})
-
-        def _extract() -> dict[str, Any]:
-            return deps.lm.extract_claim_fields(state["message"], state.get("history", []))
-
+        out: dict[str, Any] = {"context": context, "existing": draft_to_payload(existing)}
         if assessment is not None:
-            # The coverage node already computed the assessment; only extraction
-            # remains, so there is nothing to overlap.
-            extracted = _extract()
-            checked = assessment
+            # The coverage node already computed the assessment; reuse it so the
+            # coverage verdict is never re-run (or overwritten) here.
+            out["assessment"], out["sources"] = assessment
         else:
-            # Field extraction and coverage assessment are independent of each
-            # other (assessment reads history + existing draft, never the
-            # extracted fields). Run them concurrently to save one LLM round-trip.
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                f_extract = pool.submit(_extract)
-                f_assess = pool.submit(lambda: assess_turn(deps, state, context))
-                extracted = f_extract.result()
-                checked = f_assess.result()
+            # Clear any assessment persisted by a previous turn's checkpoint so
+            # this turn's coverage assessment is always computed fresh.
+            out["assessment"] = None
+            out["sources"] = []
+        return out
 
-        merged = merge_draft(existing, extracted)
-        gate = check_coverage_gate(deps, state["message"], context, assessment=checked, state=state)
+    def _extract_fields(state: AgentState) -> dict[str, Any]:
+        return {"extracted": deps.lm.extract_claim_fields(state["message"], state.get("history", []))}
+
+    def _assess_coverage(state: AgentState) -> dict[str, Any]:
+        if state.get("assessment") is not None:
+            # Delegated from the coverage node: the assessment is already stored.
+            return {}
+        analysis, sources = assess_turn(deps, state, state["context"])
+        return {"assessment": analysis, "sources": sources}
+
+    def _compose(state: AgentState) -> dict[str, Any]:
+        merged = merge_draft(draft_from_payload(state["existing"]), state["extracted"])
+        gate = check_coverage_gate(
+            deps, state["message"], state["context"],
+            assessment=(state["assessment"], state["sources"]), state=state,
+        )
         if gate is not None:
-            deps.db.save_draft(user_id, merged)
+            deps.db.save_draft(state["user_id"], merged)
             return {"result": gate}
-        deps.db.save_draft(user_id, merged)
+        deps.db.save_draft(state["user_id"], merged)
         missing = missing_claim_fields(merged)
-        analysis, sources = checked
+        analysis, sources = state["assessment"], state["sources"]
         cited_sources = [s for s in sources if s['id'] in analysis['cited_ids']]
         response = compose_coverage_answer(deps, state["message"], analysis, cited_sources)
         response += " You can complete and review the claim details below. Submitting a claim does not guarantee payment."
@@ -276,7 +297,20 @@ def build_claim_submit_node(deps: Deps, assessment=None, interactive: bool = Tru
             return {"intent": "cancel"}
         return {"intent": "confirm", "draft_input": decision.get("draft") or {}}
 
-    return _claim_submit
+    builder.add_node("prepare", _prepare)
+    builder.add_node("extract_fields", _extract_fields)
+    builder.add_node("assess_coverage", _assess_coverage)
+    builder.add_node("compose", _compose)
+    builder.add_edge(START, "prepare")
+    builder.add_conditional_edges(
+        "prepare",
+        lambda s: [Send("extract_fields", s), Send("assess_coverage", s)],
+        ["extract_fields", "assess_coverage"],
+    )
+    builder.add_edge("extract_fields", "compose")
+    builder.add_edge("assess_coverage", "compose")
+    builder.add_edge("compose", END)
+    return builder.compile(name="claim_submit")
 
 
 def build_confirm_node(deps: Deps) -> Any:
