@@ -6,10 +6,7 @@ round-trip with the deterministic test doubles and an isolated checkpointer.
 """
 from __future__ import annotations
 
-import sqlite3
 from unittest.mock import Mock
-
-from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app.agent.graph import run_agent
 
@@ -28,16 +25,18 @@ def _claim_deps(deps):
     return deps
 
 
-def _checkpointer(tmp_path):
-    conn = sqlite3.connect(str(tmp_path / "checkpoint.sqlite"), check_same_thread=False)
-    saver = SqliteSaver(conn)
-    saver.setup()
-    return saver
+def _checkpointer(tmp_path, monkeypatch):
+    """Production checkpointer (strict serializer) on an isolated path."""
+    from app.agent.checkpoint import build_checkpointer
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "checkpoint_path", str(tmp_path / "checkpoint.sqlite"))
+    return build_checkpointer()
 
 
-def test_claim_submit_pauses_then_resumes_on_confirm(deps, tmp_path):
+def test_claim_submit_pauses_then_resumes_on_confirm(deps, tmp_path, monkeypatch):
     deps = _claim_deps(deps)
-    cp = _checkpointer(tmp_path)
+    cp = _checkpointer(tmp_path, monkeypatch)
 
     draft = run_agent("u1", "I want to file a claim for a burst pipe",
                       history=[], deps=deps, checkpointer=cp, thread_id="u1")
@@ -57,9 +56,9 @@ def test_claim_submit_pauses_then_resumes_on_confirm(deps, tmp_path):
     assert "claim_id" in confirmed["data"]["claim"]
 
 
-def test_claim_submit_cancel_clears_draft(deps, tmp_path):
+def test_claim_submit_cancel_clears_draft(deps, tmp_path, monkeypatch):
     deps = _claim_deps(deps)
-    cp = _checkpointer(tmp_path)
+    cp = _checkpointer(tmp_path, monkeypatch)
 
     draft = run_agent("u1", "I want to file a claim", history=[], deps=deps,
                       checkpointer=cp, thread_id="u1")
@@ -75,9 +74,9 @@ def test_claim_submit_cancel_clears_draft(deps, tmp_path):
     assert cancelled["data"]["draft_cancelled"] is True
 
 
-def test_stale_confirm_without_interrupt_falls_back_to_route(deps, tmp_path):
+def test_stale_confirm_without_interrupt_falls_back_to_route(deps, tmp_path, monkeypatch):
     deps = _claim_deps(deps)
-    cp = _checkpointer(tmp_path)
+    cp = _checkpointer(tmp_path, monkeypatch)
 
     edits = {"policy_number": "POL-1092", "claim_type": "Water Damage",
              "amount": 1200.0, "description": "Kitchen pipe burst"}
