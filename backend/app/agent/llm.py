@@ -370,8 +370,12 @@ class GeminiLanguageModel:
         result = self._tool_call(
             "extract_claim_fields",
             ClaimFieldsResult,
-            "Extract insurance claim details stated by the user.",
-            "Extract claim details. Only include fields the user actually stated; leave others null.",
+            "Extract insurance claim details from the user's description.",
+            "Extract claim details. Infer claim_type as a short insurance category from what "
+            "happened (e.g. Water Damage, Personal Property, Fire, Theft, Storm/Wind, Vandalism). "
+            "Set description to a concise summary of the incident. Set amount to the dollar "
+            "amount stated, if any. Set policy_number only if the user explicitly stated it, "
+            "otherwise leave it null.",
             f"Conversation:\n{hist}\n\nLatest message:\n{message}",
         )
         out: dict[str, Any] = {}

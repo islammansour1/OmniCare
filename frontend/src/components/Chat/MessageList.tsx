@@ -40,6 +40,7 @@ export function MessageList({
           key={message.id}
           message={message.role === 'assistant' && message.message_type === 'claim_draft' && (index !== lastAction || isLoading)
             ? { ...message, data: { ...message.data, confirm_required: false } } : message}
+          loading={isLoading}
           onSuggestion={onSuggestion}
           onConfirmSubmit={onConfirmSubmit}
           onCancelSubmit={onCancelSubmit}

@@ -50,15 +50,17 @@ Embeddings can be overridden independently with `EMBEDDING_PROVIDER`,
 `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`, and `EMBEDDING_BASE_URL`. Do not mix
 keys and endpoints belonging to different providers.
 
-Voice is optional and requires separate speech-provider configuration:
+Real-time voice is optional and runs on **LiveKit** with Deepgram for speech:
 
-- **STT**: `DEEPGRAM_API_KEY` (Deepgram).
-- **TTS**: `TTS_PROVIDER` (`openai` or `deepgram`) plus `TTS_VOICE` and
-  `TTS_MODEL`. Deepgram TTS also uses the Deepgram key; OpenAI TTS uses the
-  OpenAI key.
+- **LiveKit** (transport + VAD + turn-taking): `LIVEKIT_URL`,
+  `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`. Use LiveKit Cloud (free tier) or a
+  self-hosted `livekit-server` (defaults to `ws://localhost:7880`).
+- **Deepgram** (STT + TTS): `DEEPGRAM_API_KEY`.
 
-A Gemini key alone enables text chat and policy search, **not** the voice
-pipeline.
+The voice agent worker (`python -m app.voice.livekit_agent`, or the
+`voice-agent` Docker service) connects to LiveKit and reuses the same LangGraph
+workflow as chat. A Gemini key alone enables text chat and policy search,
+**not** the voice pipeline.
 
 ---
 
@@ -138,11 +140,13 @@ a specific provider/feature.
 | `EMBEDDING_MODEL` | `""` | Embedding model; defaults to `gemini-embedding-001` (Gemini) or `text-embedding-3-small` (OpenAI). | Conditional (required for `openai-compatible` embeddings) |
 | `EMBEDDING_API_KEY` | `""` | Embedding key; falls back to the LLM/OpenAI/Gemini key when unset. | Optional |
 | `EMBEDDING_BASE_URL` | `""` | Embedding endpoint; falls back to the provider default. | Conditional (required for `openai-compatible` embeddings) |
-| `DEEPGRAM_API_KEY` | `""` | Deepgram key for optional voice STT. | Optional (voice only) |
+| `DEEPGRAM_API_KEY` | `""` | Deepgram key for voice STT and TTS. | Optional (voice only) |
 | `DEEPGRAM_MODEL` | `nova-2` | Deepgram STT model. | Optional (voice only) |
-| `TTS_PROVIDER` | `openai` | TTS provider (`openai` or `deepgram`). | Optional (voice only) |
-| `TTS_VOICE` | `alloy` | TTS voice. | Optional (voice only) |
-| `TTS_MODEL` | `tts-1` | TTS model. | Optional (voice only) |
+| `LIVEKIT_URL` | `ws://localhost:7880` | LiveKit server URL the browser uses. | Optional (voice only) |
+| `LIVEKIT_INTERNAL_URL` | `""` | LiveKit server URL the backend/agent uses (docker); falls back to `LIVEKIT_URL`. | Optional (voice only) |
+| `LIVEKIT_API_KEY` | `devkey` | LiveKit API key. | Optional (voice only) |
+| `LIVEKIT_API_SECRET` | `secret` | LiveKit API secret. | Optional (voice only) |
+| `LIVEKIT_AGENT_NAME` | `omnicare-agent` | Agent name used for dispatch. | Optional (voice only) |
 | `RAG_HYBRID_SEARCH` | `true` | Enable hybrid retrieval (vector + BM25/rank fusion); `false` = vector only. | Optional |
 | `RAG_TOP_K` | `4` | Number of retrieval candidates. | Optional |
 | `RAG_SCORE_THRESHOLD` | `0.05` | Minimum retrieval score threshold. | Optional |

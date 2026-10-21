@@ -10,6 +10,7 @@ import { GreetingCard } from '../cards/GreetingCard';
 
 export interface MessageBubbleProps {
   message: ChatMessage;
+  loading?: boolean;
   onSuggestion: (text: string) => void;
   onConfirmSubmit: (draft: ClaimDraft) => void;
   onCancelSubmit: () => void;
@@ -17,6 +18,7 @@ export interface MessageBubbleProps {
 
 export function MessageBubble({
   message,
+  loading = false,
   onSuggestion,
   onConfirmSubmit,
   onCancelSubmit,
@@ -36,6 +38,7 @@ export function MessageBubble({
   return (
     <AssistantMessage
       message={message}
+      loading={loading}
       onSuggestion={onSuggestion}
       onConfirmSubmit={onConfirmSubmit}
       onCancelSubmit={onCancelSubmit}
@@ -48,11 +51,13 @@ const PROSE_MESSAGE_TYPES = new Set(['claim_list', 'claim_status', 'claim_draft'
 
 function AssistantMessage({
   message,
+  loading,
   onSuggestion,
   onConfirmSubmit,
   onCancelSubmit,
 }: {
   message: Extract<ChatMessage, { role: 'assistant' }>;
+  loading: boolean;
   onSuggestion: (text: string) => void;
   onConfirmSubmit: (draft: ClaimDraft) => void;
   onCancelSubmit: () => void;
@@ -69,6 +74,7 @@ function AssistantMessage({
         ) : null}
         <AssistantCard
           message={message}
+          loading={loading}
           onSuggestion={onSuggestion}
           onConfirmSubmit={onConfirmSubmit}
           onCancelSubmit={onCancelSubmit}
@@ -83,11 +89,13 @@ function AssistantMessage({
  */
 function AssistantCard({
   message,
+  loading,
   onSuggestion,
   onConfirmSubmit,
   onCancelSubmit,
 }: {
   message: Extract<ChatMessage, { role: 'assistant' }>;
+  loading: boolean;
   onSuggestion: (text: string) => void;
   onConfirmSubmit: (draft: ClaimDraft) => void;
   onCancelSubmit: () => void;
@@ -113,6 +121,7 @@ function AssistantCard({
           <Citations sources={message.sources} />
           <ClaimReviewForm
             data={message.data}
+            loading={loading}
             onConfirm={onConfirmSubmit}
             onCancel={onCancelSubmit}
           />

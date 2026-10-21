@@ -12,7 +12,7 @@ from .schemas import ChatRequest, ChatResponse
 logger = logging.getLogger('omnicare.service')
 
 
-def handle_chat(req: ChatRequest, on_progress=None) -> ChatResponse:
+def handle_chat(req: ChatRequest, on_progress=None, interactive: bool = True) -> ChatResponse:
     from .runtime import get_runtime
     rt = get_runtime()
     scope = rt.db.resolve_scope(req.user_id, req.conversation_id)
@@ -24,11 +24,22 @@ def handle_chat(req: ChatRequest, on_progress=None) -> ChatResponse:
             cached = rt.db.cached_turn(scope, req.request_id, body_hash)
             if cached:
                 return ChatResponse(**cached)
+        # Interactive turns run against the persistent checkpointer and resume a
+        # pending confirmation interrupt when the client supplies a decision.
+        checkpointer = thread_id = resume = None
+        if interactive:
+            from .agent.checkpoint import build_checkpointer
+            checkpointer = build_checkpointer()
+            thread_id = scope
+            if req.action in ("confirm_submit", "cancel_submit"):
+                resume = {"action": req.action,
+                          "draft": req.draft.model_dump(exclude_none=True) if req.draft else {}}
         try:
             result = run_agent(
                 user_id=scope, owner_id=req.user_id, message=req.message, action=req.action,
                 draft_input=req.draft.model_dump(exclude_none=True) if req.draft else None,
-                history=rt.db.get_history(scope), deps=rt, on_progress=on_progress)
+                history=rt.db.get_history(scope), deps=rt, on_progress=on_progress,
+                checkpointer=checkpointer, thread_id=thread_id, resume=resume, interactive=interactive)
         except Exception:
             logger.exception('agent turn failed')
             # Errors are not cached/persisted so the same request can be retried.
@@ -44,4 +55,9 @@ def handle_chat(req: ChatRequest, on_progress=None) -> ChatResponse:
 
 
 def handle_transcript(user_id: str, transcript: str, conversation_id: str | None = None) -> ChatResponse:
-    return handle_chat(ChatRequest(user_id=user_id, message=transcript, conversation_id=conversation_id))
+    # Voice turns are stateless: no confirmation interrupts (a spoken turn has
+    # no action flag to resume with).
+    return handle_chat(
+        ChatRequest(user_id=user_id, message=transcript, conversation_id=conversation_id),
+        interactive=False,
+    )

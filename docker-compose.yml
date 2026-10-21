@@ -15,6 +15,25 @@ services:
       - ./sample_policy.md:/sample_policy.md:ro
     restart: unless-stopped
 
+  # LiveKit real-time voice agent. Reuses the backend image and runs the agent
+  # worker instead of the FastAPI server. It connects to a LiveKit server whose
+  # credentials come from LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET
+  # (see .env.example). STT/TTS need DEEPGRAM_API_KEY.
+  voice-agent:
+    build: ./backend
+    command: python -m app.voice.livekit_agent
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      - backend
+    volumes:
+      # Share the same SQLite / Chroma / claims store as the backend so spoken
+      # and typed turns resolve to the same conversations and history.
+      - backend_data:/app/data
+      - ./sample_policy.md:/sample_policy.md:ro
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     ports:

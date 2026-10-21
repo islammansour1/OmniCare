@@ -32,8 +32,7 @@ export function ChatShell({ userId }: { userId: string }) {
   const voice = useVoice({
     userId,
     conversationId: chat.conversationId,
-    onAssistantMessage: chat.appendAssistant,
-    onUserTranscript: chat.appendUser,
+    onTurnComplete: () => void chat.refresh(),
   });
 
   return (

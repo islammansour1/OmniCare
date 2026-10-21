@@ -1,4 +1,4 @@
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from ..schemas import REQUIRED_CLAIM_FIELDS, ClaimDraft
 
@@ -12,6 +12,22 @@ class AgentState(TypedDict, total=False):
     history: list[dict[str, str]]
     intent: str
     result: dict[str, Any]
+
+
+class AgentInput(TypedDict):
+    """Fields a caller must supply to run the agent.
+
+    This is the schema LangGraph Studio surfaces as its input form. ``intent``
+    and ``result`` are deliberately absent — they are computed by the graph
+    (the ``route`` node and the leaf nodes), never supplied by the caller.
+    """
+
+    user_id: str
+    message: str
+    owner_id: NotRequired[str]
+    action: NotRequired[str | None]
+    draft_input: NotRequired[dict[str, Any] | None]
+    history: NotRequired[list[dict[str, str]]]
 
 
 # ---------------------------------------------------------------------------

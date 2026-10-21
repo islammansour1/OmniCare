@@ -56,6 +56,9 @@ def client(tmp_path, monkeypatch):
     for key in ("llm_api_key", "gemini_api_key", "openai_api_key",
                 "anthropic_api_key", "embedding_api_key", "deepgram_api_key"):
         monkeypatch.setattr(settings, key, "")
+    # Isolate the persistent checkpointer so interactive tests never touch the
+    # real checkpoint database.
+    monkeypatch.setattr(settings, "checkpoint_path", str(tmp_path / "checkpoint.db"))
 
     deps = make_deps(tmp_path)
     from app.runtime import set_runtime

@@ -72,6 +72,19 @@ export const listConversations = () => request<Conversation[]>('/conversations')
 export const createConversation = () => request<Conversation>('/conversations', { method: 'POST' });
 export const loadConversation = (id: string) => request<{ messages: ChatMessage[] }>(`/conversations/${encodeURIComponent(id)}`);
 
+/** LiveKit voice: fetch a signed access token for the user's voice room. */
+export function getVoiceToken(
+  userId: string,
+  conversationId?: string,
+): Promise<{ url: string; token: string; room: string }> {
+  const params = new URLSearchParams({ user_id: userId });
+  if (conversationId) params.set('conversation_id', conversationId);
+  return request<{ url: string; token: string; room: string }>(
+    `/voice/token?${params.toString()}`,
+    { method: 'POST' },
+  );
+}
+
 /** Stream real server progress; the completed response is one atomic card. */
 export async function streamChat(payload: ChatRequest, progress: (label: string) => void): Promise<ChatResponse> {
   const res = await fetch(`${getBase()}/chat/stream`, {

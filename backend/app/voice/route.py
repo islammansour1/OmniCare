@@ -1,159 +1,83 @@
-"""WebSocket voice endpoint.
+"""LiveKit voice token endpoint.
 
-Browser streams PCM16/16kHz audio → hosted STT (Deepgram) → the same LangGraph
-workflow as chat → hosted TTS → audio back. Interim transcripts are streamed
-live so the user sees recognition in real time.
+The browser asks for a signed LiveKit access token. We create the room,
+dispatch the voice agent into it, and return a token so the client can connect
+and start streaming its microphone.
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
+from livekit import api as lkapi
+from livekit.api import agent_dispatch_service, room_service
+from pydantic import BaseModel
 
 from ..config import settings
 from ..observability import log_event
-from ..service import handle_transcript
-from .stt import DeepgramSTT, VoiceUnavailableError
-from .tts import synthesize
+from ..runtime import get_runtime
+from ..session import session_owner
 
 logger = logging.getLogger("omnicare.voice")
+
 router = APIRouter()
 
 
-async def _send(ws: WebSocket, payload: dict[str, Any]) -> None:
-    await ws.send_text(json.dumps(payload))
+class VoiceTokenResponse(BaseModel):
+    url: str
+    token: str
+    room: str
 
 
-async def _process_utterance(ws: WebSocket, user_id: str, transcript: str, conversation_id: str | None = None) -> None:
-    if not transcript.strip():
-        await _send(ws, {"type": "state", "state": "idle"})
-        return
-    await _send(ws, {"type": "state", "state": "processing"})
-    try:
-        chat_resp = await asyncio.to_thread(handle_transcript, user_id, transcript, conversation_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("voice turn failed")
-        await _send(ws, {"type": "error", "detail": f"Processing failed: {exc}"})
-        await _send(ws, {"type": "state", "state": "idle"})
-        return
-
-    await _send(
-        ws,
-        {
-            "type": "message",
-            "message": {
-                "response": chat_resp.response,
-                "sources": [s.model_dump() for s in chat_resp.sources],
-                "tool_calls": [t.model_dump() for t in chat_resp.tool_calls],
-                "message_type": chat_resp.message_type,
-                "data": chat_resp.data,
-                "mode": chat_resp.mode,
-            },
-        },
-    )
-    # Synthesize + stream speech.
-    await _send(ws, {"type": "state", "state": "speaking"})
-    try:
-        audio = synthesize(chat_resp.response)
-        await ws.send_bytes(audio)
-    except VoiceUnavailableError as exc:
-        await _send(ws, {"type": "error", "detail": str(exc)})
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("TTS failed: %s", exc)
-        await _send(ws, {"type": "error", "detail": f"Speech synthesis failed: {exc}"})
-    await _send(ws, {"type": "state", "state": "idle"})
+def _room_name(user_id: str, conversation_id: str | None = None) -> str:
+    # "voice-<user_id>" or "voice-<user_id>-<conversation_id>"; the worker parses it back.
+    return f"voice-{user_id}" if not conversation_id else f"voice-{user_id}-{conversation_id}"
 
 
-@router.websocket("/api/v1/voice")
-async def voice_endpoint(websocket: WebSocket, user_id: str, conversation_id: str | None = None) -> None:
-    from ..runtime import get_runtime
-    from ..session import COOKIE
-    from urllib.parse import urlparse
-    owner = get_runtime().db.session_owner(websocket.cookies.get(COOKIE, ''))
-    origin = websocket.headers.get('origin', '')
-    if owner != user_id or (origin not in settings.cors_origin_list and urlparse(origin).netloc != websocket.headers.get('host')):
-        await websocket.close(code=1008)
-        return
-    try:
+@router.post("/api/v1/voice/token", response_model=VoiceTokenResponse)
+async def voice_token(
+    user_id: str,
+    conversation_id: str | None = None,
+    owner: str = Depends(session_owner),
+) -> VoiceTokenResponse:
+    if user_id != owner:
+        raise HTTPException(403, "Session does not own this user ID")
+
+    # Bind voice to the active conversation so spoken and typed turns share one
+    # thread (and validate it actually belongs to the owner).
+    if conversation_id:
         get_runtime().db.resolve_scope(owner, conversation_id)
-    except Exception:
-        await websocket.close(code=1008)
-        return
-    ws = websocket
-    await websocket.accept()
-    audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
-    stt_task: asyncio.Task | None = None
-    final_transcript: str = ""
 
-    async def audio_source():
-        while True:
-            frame = await audio_queue.get()
-            if frame is None:
-                return
-            yield frame
+    room = _room_name(user_id, conversation_id)
+    internal_url = settings.livekit_internal_url or settings.livekit_url
 
-    async def run_stt() -> str:
-        stt = DeepgramSTT()
-        latest = ""
-        async for evt in stt.transcribe(audio_source()):
-            if evt["final"]:
-                latest = evt["text"]
-                await _send(ws, {"type": "transcript", "text": latest, "final": True})
-            elif evt["text"].strip():
-                await _send(ws, {"type": "transcript", "text": evt["text"], "final": False})
-        return latest
-
-    try:
-        await _send(ws, {"type": "state", "state": "idle"})
-        while True:
-            msg = await websocket.receive()
-            if msg.get("type") == "websocket.disconnect":
-                log_event("voice.disconnected", user_id=user_id)
-                break
-
-            if msg.get("text") is not None:
-                data = json.loads(msg["text"])
-                typ = data.get("type")
-                if typ == "start":
-                    final_transcript = ""
-                    if settings.deepgram_api_key:
-                        stt_task = asyncio.create_task(run_stt())
-                        await _send(ws, {"type": "state", "state": "listening"})
-                    else:
-                        await _send(
-                            ws,
-                            {
-                                "type": "error",
-                                "detail": "Voice unavailable: DEEPGRAM_API_KEY is not configured.",
-                            },
-                        )
-                elif typ == "stop":
-                    await audio_queue.put(None)
-                    if stt_task is not None:
-                        final_transcript = await stt_task
-                        stt_task = None
-                    await _process_utterance(ws, user_id, final_transcript, conversation_id)
-                elif typ == "cancel":
-                    await audio_queue.put(None)
-                    if stt_task is not None:
-                        stt_task.cancel()
-                        stt_task = None
-                    await _send(ws, {"type": "state", "state": "idle"})
-            elif msg.get("bytes") is not None:
-                if stt_task is not None:
-                    await audio_queue.put(msg["bytes"])
-    except WebSocketDisconnect:
-        log_event("voice.disconnected", user_id=user_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("voice connection error")
+    async with lkapi.LiveKitAPI(
+        internal_url, settings.livekit_api_key, settings.livekit_api_secret
+    ) as lk:
+        # Create the room (idempotent) so the agent has somewhere to join.
         try:
-            await _send(ws, {"type": "error", "detail": str(exc)})
-        except Exception:  # noqa: BLE001
+            await lk.room.create_room(room_service.CreateRoomRequest(name=room))
+        except Exception:  # noqa: BLE001 — room already exists
             pass
-    finally:
-        if stt_task is not None:
-            stt_task.cancel()
-        await audio_queue.put(None)
+        # Dispatch the voice agent into the room.
+        try:
+            await lk.agent_dispatch.create_dispatch(
+                agent_dispatch_service.CreateAgentDispatchRequest(
+                    agent_name=settings.livekit_agent_name, room=room
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — non-fatal; the agent may already run
+            log_event("voice.dispatch_failed", error=str(exc))
+
+    token = (
+        lkapi.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
+        .with_identity(user_id)
+        .with_name(user_id)
+        .with_grants(
+            lkapi.VideoGrants(room_join=True, room=room, can_publish=True, can_subscribe=True)
+        )
+        .to_jwt()
+    )
+
+    log_event("voice.token_issued", user_id=user_id, room=room)
+    return VoiceTokenResponse(url=settings.livekit_url, token=token, room=room)

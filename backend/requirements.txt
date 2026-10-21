@@ -7,12 +7,21 @@ python-dotenv>=1.0,<2
 
 # Agent orchestration
 langgraph>=1.0,<2.0
+# Persistent checkpointer for human-in-the-loop interrupts (chat thread state).
+langgraph-checkpoint-sqlite>=3.0,<4
+# CLI for `langgraph dev` (LangGraph Studio — local graph visualization/debugging)
+langgraph-cli>=0.4,<1
 
 # Hosted inference clients
-openai>=1.40,<2
+openai>=3.0,<4
 
 # Gemini (native, via LangChain)
 langchain-google-genai>=4.0,<5
+
+# Real-time voice (LiveKit Agents)
+livekit-agents>=1.8,<2
+livekit-plugins-deepgram>=1.8,<2
+livekit-plugins-silero>=1.8,<2
 
 # Local storage (NOT inference)
 chromadb>=0.5.5,<1.0
@@ -21,8 +30,12 @@ posthog>=2.4.0,<6
 numpy>=1.26,<3
 filelock>=3.13,<4
 
-# Voice transport
-websockets>=12.0,<15
-
 # HTTP
 httpx>=0.27,<1
+
+# Compatibility pin (transitive, via livekit-api -> PyJWT). cryptography 43+
+# switched its default backend to the Rust aws-lc-rs, which SIGILLs (illegal
+# instruction, exit 132) under Docker Desktop on Apple Silicon. We only ever
+# sign LiveKit tokens with HS256 (stdlib hmac), so the newer asymmetric backend
+# is not needed — stay on the last OpenSSL-backed 42.x line.
+cryptography>=42,<43

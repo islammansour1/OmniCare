@@ -63,7 +63,9 @@ export function useChat(userId: string) {
   const submit = useCallback(async (payload: ChatRequest, retry = false) => {
     if (busy.current || !conversationId) return;
     busy.current = true; setIsLoading(true); setError(null); setProgress('Connecting');
-    if (!retry) appendUser(payload.message);
+    // Action-driven turns (confirm/cancel) are button clicks, not typed messages,
+    // so don't inject a synthetic user bubble for them.
+    if (!retry && !payload.action) appendUser(payload.message);
     try {
       const response = await streamChat(payload, setProgress);
       if (response.message_type === 'error') throw new Error(response.response);
@@ -80,6 +82,19 @@ export function useChat(userId: string) {
   const cancelSubmit = () => submit({ user_id: userId, conversation_id: conversationId,
     message: 'Cancel claim submission', action: 'cancel_submit', draft: null, request_id: randomId('req') });
   const retry = () => lastFailedRequest ? submit(lastFailedRequest, true) : Promise.resolve();
+
+  // Re-fetch the current conversation (e.g. after a spoken voice turn) without
+  // the full select() ceremony.
+  const refresh = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const result = await loadConversation(conversationId);
+      setMessages(result.messages);
+    } catch {
+      // best-effort — keep the current view if the refresh fails
+    }
+  }, [conversationId]);
+
   return { messages, conversations, conversationId, select, isLoading, error, progress, canRetry: !!lastFailedRequest,
-    send, confirmSubmit, cancelSubmit, retry, appendUser, appendAssistant, clear };
+    send, confirmSubmit, cancelSubmit, retry, refresh, appendUser, appendAssistant, clear };
 }

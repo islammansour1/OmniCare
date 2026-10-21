@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     claims_path: str = "./data/mock_claims.json"
     policy_path: str = "../sample_policy.md"
     chroma_path: str = "./data/chroma"
+    checkpoint_path: str = "./data/checkpoint.db"
 
     # Explicit provider selection takes precedence over legacy provider keys.
     llm_provider: Literal["auto", "openai", "gemini", "anthropic", "openai-compatible"] = "auto"
@@ -65,10 +66,14 @@ class Settings(BaseSettings):
     deepgram_api_key: str = ""
     deepgram_model: str = "nova-2"
 
-    # --- Text-to-speech ---------------------------------------------------
-    tts_provider: str = "openai"  # "openai" | "deepgram"
-    tts_voice: str = "alloy"
-    tts_model: str = "tts-1"
+    # --- LiveKit real-time voice -------------------------------------------
+    livekit_url: str = "ws://localhost:7880"
+    # Internal address used by the backend/agent to reach the LiveKit server
+    # (differs from `livekit_url` when running under docker). Falls back to it.
+    livekit_internal_url: str = ""
+    livekit_api_key: str = "devkey"
+    livekit_api_secret: str = "secret"
+    livekit_agent_name: str = "omnicare-agent"
 
     # --- RAG --------------------------------------------------------------
     rag_hybrid_search: bool = True
@@ -98,6 +103,10 @@ class Settings(BaseSettings):
     @property
     def chroma_dir(self) -> Path:
         return self._resolve(self.chroma_path)
+
+    @property
+    def checkpoint_file(self) -> Path:
+        return self._resolve(self.checkpoint_path)
 
     @property
     def cors_origin_list(self) -> list[str]:

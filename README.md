@@ -2,11 +2,9 @@
 
 An insurance customer-service assistant that answers coverage questions with
 real policy citations, looks up claim status, and drafts and submits claims.
-Every answer is backed by a **hosted** LLM (Google Gemini by default; OpenAI,
-Anthropic, and OpenAI-compatible providers are also supported). There is no
-local inference anywhere — if the configured provider's key is missing, the
-backend fails fast at startup rather than falling back to a demo or offline
-mode.
+Every answer is backed by a **hosted** LLM (Google Gemini, native via LangChain).
+There is no local inference anywhere — if the Gemini key is missing, the backend
+fails fast at startup rather than falling back to a demo or offline mode.
 
 ## How it works
 
@@ -31,11 +29,11 @@ mode.
 ```mermaid
 flowchart LR
     UI[React chat + contextual cards + mic] -->|HTTP / SSE| API[FastAPI routes]
-    UI -->|WebSocket PCM16| WS[Voice route]
+    UI <-->|WebRTC| LK[LiveKit server] <--> VA[LiveKit voice agent]
     API --> SVC[Turn service: lock + retry cache + persistence]
     SVC --> AG[LangGraph workflow]
-    WS --> STT[Hosted STT — Deepgram] --> AG
-    AG --> TTS[Hosted TTS] --> UI
+    VA --> STT[Deepgram STT] --> AG
+    AG --> TTS[Deepgram TTS] --> VA
     subgraph AG[LangGraph — single graph, chat & voice]
         ROUTE[route] --> COV[coverage]
         ROUTE --> STATUS[claim_status]
@@ -87,7 +85,8 @@ docker compose up --build
 Open **http://localhost:8080**. Add your Gemini key to `.env` as `LLM_API_KEY`
 before starting — a missing key fails fast at startup, because inference is
 hosted-only with no offline fallback. A Gemini key enables text chat and policy
-search; optional voice requires a separate Deepgram (and TTS) key.
+search; optional real-time voice requires LiveKit credentials plus a Deepgram key
+(for STT and TTS) — see [Setup](docs/SETUP.md).
 
 ## Sample requests (curl)
 

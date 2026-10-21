@@ -1,4 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+
+from langgraph.types import interrupt
 
 from ..claims import ClaimNotFoundError, InvalidClaimError
 from ..claims.tools import SubmitClaimInput
@@ -210,18 +213,35 @@ def check_coverage_gate(
     )
 
 
-def build_claim_submit_node(deps: Deps, assessment=None) -> Any:
+def build_claim_submit_node(deps: Deps, assessment=None, interactive: bool = True) -> Any:
     def _claim_submit(state: AgentState) -> dict[str, Any]:
         user_id = state["user_id"]
         existing = deps.db.load_draft(user_id) or ClaimDraft()
-        extracted = deps.lm.extract_claim_fields(state["message"], state.get("history", []))
-        merged = merge_draft(existing, extracted)
         # Assess the original message even if extraction misses fields. The
         # extracted draft is context, never a replacement for the user's facts.
         context = list(state.get("history", []))
         if existing.description:
             context.append({"role": "assistant", "content": "Existing draft description (may be corrected by latest message): " + existing.description})
-        checked = assessment or assess_turn(deps, state, context)
+
+        def _extract() -> dict[str, Any]:
+            return deps.lm.extract_claim_fields(state["message"], state.get("history", []))
+
+        if assessment is not None:
+            # The coverage node already computed the assessment; only extraction
+            # remains, so there is nothing to overlap.
+            extracted = _extract()
+            checked = assessment
+        else:
+            # Field extraction and coverage assessment are independent of each
+            # other (assessment reads history + existing draft, never the
+            # extracted fields). Run them concurrently to save one LLM round-trip.
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                f_extract = pool.submit(_extract)
+                f_assess = pool.submit(lambda: assess_turn(deps, state, context))
+                extracted = f_extract.result()
+                checked = f_assess.result()
+
+        merged = merge_draft(existing, extracted)
         gate = check_coverage_gate(deps, state["message"], context, assessment=checked, state=state)
         if gate is not None:
             deps.db.save_draft(user_id, merged)
@@ -233,18 +253,28 @@ def build_claim_submit_node(deps: Deps, assessment=None) -> Any:
         response = compose_coverage_answer(deps, state["message"], analysis, cited_sources)
         response += " You can complete and review the claim details below. Submitting a claim does not guarantee payment."
         log_event("agent.claim_draft", missing=missing)
-        return {
-            "result": build_response(
-                response=response,
-                message_type="claim_draft",
-                data={
-                    "draft": draft_to_payload(merged),
-                    "missing_fields": missing,
-                    "confirm_required": True,
-                },
-                sources=cited_sources,
-            )
-        }
+        draft_result = build_response(
+            response=response,
+            message_type="claim_draft",
+            data={
+                "draft": draft_to_payload(merged),
+                "missing_fields": missing,
+                "confirm_required": True,
+            },
+            sources=cited_sources,
+        )
+
+        if not interactive:
+            # Stateless path (voice): surface the draft without pausing for a
+            # human confirmation round-trip (voice has no confirm action).
+            return {"result": draft_result}
+
+        # Human-in-the-loop: pause and surface the draft for explicit
+        # confirmation, then resume into the confirm/cancel node.
+        decision = interrupt(draft_result)
+        if decision.get("action") == "cancel_submit":
+            return {"intent": "cancel"}
+        return {"intent": "confirm", "draft_input": decision.get("draft") or {}}
 
     return _claim_submit
 
