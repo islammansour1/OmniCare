@@ -80,8 +80,11 @@ class FakeLanguageModel:
         from types import SimpleNamespace
         return SimpleNamespace(sufficient=True, search_queries=[])
 
-    def compose_clarification(self, question, missing_fact, sources, history):
+    def compose_clarification(self, question, missing_fact, sources, history, policy_terms=None, clarification_plan=None, claim_requested=False):
         return missing_fact
+
+    def compose_claim_offer(self, message, history):
+        return "Would you like to start a claim?"
 
     def rewrite_query(self, question, history):
         previous = next((h['content'] for h in reversed(history) if h['role'] == 'user'), '')
@@ -202,7 +205,7 @@ class FakeLanguageModel:
                                                  "a gradual leak, or flooding?"}
         return empty
 
-    def compose_answer(self, question, verdict, facts, sections):
+    def compose_answer(self, question, verdict, facts, sections, history=None):
         labels = {"covered": "Covered", "excluded": "Excluded",
                   "conditional": "Conditional coverage", "uncertain": "More information needed",
                   "unsupported": "Coverage not established"}

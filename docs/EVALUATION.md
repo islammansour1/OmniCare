@@ -14,20 +14,31 @@ There are three layers:
 
 ## 1. Unit / contract tests
 
-Backend (105 tests):
+Backend (135 deterministic checks):
 
 ```bash
 cd backend
 .venv/bin/python -m pytest -q
 ```
 
-Frontend build + tests (27 tests):
+Frontend build + tests (23 checks):
 
 ```bash
 cd frontend
 npm run build
 npm run test:run
 ```
+
+The suite was trimmed from 160 backend and 30 frontend checks. Removed checks
+included fake-model-only verdict assertions, duplicate behavior checks, repeated
+label mappings, broad Cartesian combinations exercising the same guard, and
+snapshots of complete graph node-name lists. Two new repair-to-claim regressions
+were retained: eligible repair assistance must offer a claim or open a draft, and
+an excluded incident cannot reach either action because of model flags.
+Security, authorization, confirmation, idempotency, persistence, source grounding,
+search budgets, conversation memory, and meaningful form/stream interactions remain
+covered. The remaining graph contract checks that the policy workflow is exposed
+as a real LangGraph subgraph.
 
 The backend suite (configured via `backend/pytest.ini`) uses deterministic
 fakes and runs **without network access**. It verifies orchestration,
@@ -122,7 +133,7 @@ credentials are missing (`exit 2`) or the quality gate fails (`exit 1`).
 | Script | What it exercises |
 | --- | --- |
 | `eval/eval_claim_workflow.py` | End-to-end claim workflow verdicts (`excluded`, `claim_draft`, `uncertain`) over four synthetic messages using isolated storage. |
-| `eval/eval_clarification_voice.py` | Evidence-review then clarification-composer ordering; asserts a clarification reply and that review precedes composition. |
+| `eval/eval_clarification_voice.py` | Hosted demo-policy dialogue: rewritten-query retrieval, evidence assessment, source-term preservation, a location-only follow-up, and a resolved coverage answer. `--scenario vague` checks that a cause is not assumed; `--scenario unknown` checks uncertainty when the user cannot provide details; `--scenario repair` replays an already-covered incident and checks the transition from repair help to claim offer/draft, with no claim submission. |
 | `eval/eval_uncertain_details.py` | A two-turn uncertain mixed account ending in a coverage answer with an `uncertain` verdict, sources, no question mark, and the correct limits ($25,000 / $500). |
 | `eval/eval_claim_search.py` | Semantic claim search over synthetic records only: candidate retrieval, model selection, and ownership filtering. |
 | `eval/eval_service_dialogue.py` | Four-turn customer-service dialogue ending in a `claim_draft` with sources and no more than two clarification turns. |

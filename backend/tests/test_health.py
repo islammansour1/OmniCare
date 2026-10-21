@@ -11,6 +11,12 @@ def test_health_contract(client):
     assert body["mode"] in ("demo", "live")
 
 
+def test_health_root_alias(client):
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json()["status"] == "healthy"
+
+
 def test_chat_required_fields(client):
     r = client.post(
         "/api/v1/chat",

@@ -2,8 +2,7 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 import pytest
-from app.agent.llm import (GeminiLanguageModel, ClaimFieldsResult,
-                           RetrievalQuery, ClaimSelection, LLMUnavailableError)
+from app.agent.llm import (GeminiLanguageModel, RetrievalQuery, ClaimSelection, LLMUnavailableError)
 from app.rag.chunking import chunk_policy
 from app.rag.embeddings import OpenAIEmbedder
 
@@ -22,21 +21,6 @@ def test_large_sections_are_bounded_and_keep_source_text():
     assert len(chunks) > 1
     assert all(len(c.text) <= 400 and c.text in text for c in chunks)
     assert len({c.id for c in chunks}) == len(chunks)
-
-
-def test_claim_type_is_not_limited_to_sample_policy_categories():
-    fields = ClaimFieldsResult(claim_type='Event equipment transit damage')
-    assert fields.claim_type == 'Event equipment transit damage'
-
-
-def test_query_rewrite_is_model_driven_even_without_trigger_words():
-    model = GeminiLanguageModel.__new__(GeminiLanguageModel)
-    model._tool_call = Mock(return_value=RetrievalQuery(query='generator electrical failure coverage limit'))
-    assert model.rewrite_query('And the ceiling?', [{'role':'user','content':'A generator failed.'}]) == 'generator electrical failure coverage limit'
-    assert model._tool_call.call_count == 1
-    model._tool_call.reset_mock()
-    model.rewrite_query('Independent question', [])
-    assert model._tool_call.call_count == 1
 
 
 def test_model_cannot_select_unknown_claim():

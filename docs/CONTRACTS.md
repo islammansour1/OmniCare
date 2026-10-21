@@ -42,10 +42,13 @@ Types: greeting, coverage_answer, claim_list, claim_status, claim_draft,
 claim_confirmation, clarification, chat, error. Coverage verdicts: covered, excluded,
 conditional, uncertain, unsupported. Missing incident facts return `clarification`
 with a short `data.question`, without displayed citations or a verdict card.
-After at most two questions, unresolved cases return `coverage_answer` with an
-uncertain verdict and a review notice. `data.policy_dialogue` stores the server's
-question count and verified evidence for subsequent turns; clients do not render
-this metadata. Final `claim_draft` responses may include policy sources and an
+After two consecutive replies without useful new facts, unresolved cases return
+`coverage_answer` with an uncertain verdict. An explicit inability to answer, a
+repeated question without progress, or missing document evidence can end questioning
+earlier. Useful partial answers reset the stalled-reply count rather than exhausting
+a fixed two-question limit. `data.policy_dialogue` stores the server's total question
+count, `stalled_turns`, terminal `stopped` flag, and verified evidence for subsequent
+turns; clients do not render this metadata. Final `claim_draft` responses may include policy sources and an
 explanation above the form. Confirmation remains an explicit action.
 `claim_list.data.claims` contains owned matches or explicitly public sample records.
 `chat.data.draft_cancelled=true` retires a cancelled draft card.

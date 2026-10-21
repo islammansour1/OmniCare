@@ -9,7 +9,6 @@ __pycache__/
 
 # Environment / secrets
 .env
-.env.*
 
 # Data (generated at runtime)
 backend/data/*.db
@@ -34,3 +33,9 @@ frontend/.vite/
 # Temp
 *.log
 .tmp_*
+
+# Generated eval traces (recreated on demand by backend/eval scripts)
+backend/eval/*_live.json
+backend/eval/*_live.md
+backend/eval/audit_*.json
+backend/eval/audit_*.md

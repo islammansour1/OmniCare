@@ -4,7 +4,7 @@ import { CoverageCard } from './CoverageCard';
 import { makeSources } from '../../test/factories';
 
 describe('CoverageCard', () => {
-  it('renders the answer and a "Covered" verdict badge', () => {
+  it('renders the answer without a verdict badge', () => {
     render(
       <CoverageCard
         data={{ answer: 'Yes, burst pipes are covered.', verdict: 'covered' }}
@@ -13,7 +13,7 @@ describe('CoverageCard', () => {
     );
 
     expect(screen.getByText('Yes, burst pipes are covered.')).toBeInTheDocument();
-    expect(screen.getByText('Covered')).toBeInTheDocument();
+    expect(screen.queryByText('Covered')).not.toBeInTheDocument();
   });
 
   it('renders citations with section and snippet', () => {
@@ -31,16 +31,4 @@ describe('CoverageCard', () => {
     expect(screen.getByText(/Water damage caused by sudden pipe bursts/)).toBeInTheDocument();
   });
 
-  it.each([
-    ['covered', 'Covered'],
-    ['excluded', 'Excluded'],
-    ['conditional', 'Conditional'],
-    ['unsupported', 'Unsupported'],
-  ] as const)('maps verdict %s to label %s', (verdict, label) => {
-    const { unmount } = render(
-      <CoverageCard data={{ answer: 'x', verdict }} sources={[]} />,
-    );
-    expect(screen.getByText(label)).toBeInTheDocument();
-    unmount();
-  });
 });

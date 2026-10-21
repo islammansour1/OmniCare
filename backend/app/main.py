@@ -58,6 +58,7 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+@app.get("/health", response_model=HealthResponse)
 @app.get("/api/v1/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(
@@ -106,7 +107,15 @@ def conversations(owner: str = Depends(session_owner)):
 @app.post('/api/v1/conversations')
 def new_conversation(owner: str = Depends(session_owner)):
     from .runtime import get_runtime
-    return get_runtime().db.create_conversation(owner)
+    from .agent.nodes import greeting_response
+    db = get_runtime().db
+    created = db.create_conversation(owner)
+    # Seed the agent's opening greeting so a new chat never starts blank.
+    greeting = greeting_response()
+    payload = {**greeting, 'request_id': '', 'mode': settings.resolved_mode}
+    db.add_message(db.resolve_scope(owner, created['id']), 'assistant',
+                   greeting['response'], greeting['message_type'], payload)
+    return created
 
 
 @app.get('/api/v1/conversations/{conversation_id}')

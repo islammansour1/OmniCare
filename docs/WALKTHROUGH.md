@@ -29,7 +29,5 @@ Verified: mixed-exclusion answer, new conversation, restored history and
 citation display. Automated tests additionally cover retry, ownership, policy
 updates, draft separation, and malformed/fabricated hosted evidence.
 
-![Restored coverage answer and policy citation](coverage-review.png)
-
 Gemini chat and embeddings were separately smoke-tested with HTTP 200 responses.
 The full hosted evaluation and optional voice pipeline are separate checks.

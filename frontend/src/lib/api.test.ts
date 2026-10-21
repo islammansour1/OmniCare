@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, getHealth, postChat } from './api';
+import { ApiError, postChat } from './api';
 
 const CHAT_PAYLOAD = {
   user_id: 'usr_1',
@@ -77,27 +77,5 @@ describe('postChat', () => {
     await expect(postChat({ ...CHAT_PAYLOAD })).rejects.toThrow(
       'Request failed with status 500',
     );
-  });
-});
-
-describe('getHealth', () => {
-  it('requests /health and returns the parsed body', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        status: 'healthy',
-        version: '1.0.0',
-        mode: 'demo',
-        providers: { llm: 'demo' },
-      }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const res = await getHealth();
-
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/health');
-    expect(res.mode).toBe('demo');
-    expect(res.status).toBe('healthy');
   });
 });

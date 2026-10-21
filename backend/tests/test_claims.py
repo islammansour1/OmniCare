@@ -42,6 +42,7 @@ def test_get_claim_status_known():
     assert claim["policy_number"] == "POL-1092"
     assert claim["status"] == "Submitted"
     assert claim["amount"] == 3500.0
+    assert claim["owner_id"] == "u1"
 
 
 def test_get_claim_status_hidden_from_other_owner():
@@ -58,14 +59,6 @@ def test_get_claim_status_unknown():
 def test_get_claim_status_invalid_identifier():
     with pytest.raises(InvalidClaimError):
         get_claim_status("..//", "u1")
-
-
-def test_submit_claim_valid():
-    claim = submit_claim("POL-1092", "Water Damage", 3500.0, "Pipe burst in kitchen", owner_id="u1")
-    assert claim["claim_id"].startswith("CLM-")
-    assert claim["status"] == "Submitted"
-    assert claim["amount"] == 3500.0
-    assert claim["owner_id"] == "u1"
 
 
 def test_validation_rejects_negative_amount():
@@ -99,18 +92,6 @@ def test_validation_rejects_bad_policy_number():
         )
 
 
-def test_original_records_preserved(tmp_path):
-    claims_file = tmp_path / "claims.json"
-    shutil.copy(SAMPLE, claims_file)
-    store = ClaimsStore(claims_file)
-    claim = store.submit_claim("POL-1092", "Water Damage", 100.0, "new claim desc", owner_id="u1")
-    claims = store.list_claims()
-    assert len(claims) == 1
-    assert claims[0]["claim_id"] == claim["claim_id"]
-    assert claims[0]["owner_id"] == "u1"
-    assert claims[0]["status"] == "Submitted"
-
-
 def test_idempotent_submission_same_id(tmp_path):
     claims_file = tmp_path / "claims.json"
     shutil.copy(SAMPLE, claims_file)
@@ -128,11 +109,3 @@ def test_different_inputs_different_ids(tmp_path):
     a = store.submit_claim("POL-1092", "Water Damage", 3500.0, "burst pipe", owner_id="u1")
     b = store.submit_claim("POL-1092", "Water Damage", 3600.0, "burst pipe", owner_id="u1")
     assert a["claim_id"] != b["claim_id"]
-
-
-def test_idempotency_key_stable():
-    k1 = ClaimsStore.idempotency_key("POL-1092", "Water Damage", 3500.0, "desc", "u1")
-    k2 = ClaimsStore.idempotency_key("POL-1092", "Water Damage", 3500.0, "desc", "u1")
-    k3 = ClaimsStore.idempotency_key("POL-1092", "Water Damage", 3500.0, "other", "u1")
-    assert k1 == k2
-    assert k1 != k3

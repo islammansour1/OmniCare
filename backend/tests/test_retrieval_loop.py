@@ -13,7 +13,7 @@ def test_searches_missing_evidence_then_revises_verdict():
     lm = SimpleNamespace(rewrite_query=Mock(return_value='normalized facts'),
                          analyze_policy=Mock(side_effect=[result(queries=['exceptions']), result('excluded')]))
     rag = SimpleNamespace(retrieve=Mock(side_effect=[
-        [{'id':'a'}], [{'id':'a'}], [{'id':'b'}]]))
+        [{'id':'a'}], [{'id':'b'}]]))
     analysis, sources = assess_policy(lm, rag, 'original duration and negation', [])
     assert analysis['verdict'] == 'excluded'
     assert [s['id'] for s in sources] == ['a','b']
@@ -62,17 +62,6 @@ def test_edited_confirmation_rechecks_incident(chat, client):
     assert len(client.deps.claims.list_claims()) == before
 
 
-def test_precomputed_query_skips_rewrite():
-    lm = SimpleNamespace(rewrite_query=Mock(side_effect=AssertionError('should not rewrite')),
-                         analyze_policy=Mock(return_value=result()))
-    rag = SimpleNamespace(retrieve=Mock(return_value=[{'id':'a'}]))
-    analysis, sources = assess_policy(lm, rag, 'original', [], query='fused query')
-    assert analysis['verdict'] == 'covered'
-    # First search keeps the original wording; the fused query replaces the rewrite.
-    assert [c.args[0] for c in rag.retrieve.call_args_list] == ['original', 'fused query']
-    lm.rewrite_query.assert_not_called()
-
-
 def test_evidence_review_expands_before_customer_clarification():
     lm = SimpleNamespace(
         rewrite_query=Mock(return_value='original'),
@@ -97,9 +86,9 @@ def test_incomplete_policy_evidence_does_not_become_a_customer_question():
     assert lm.analyze_policy.call_count == 1
 
 
-def test_user_clarification_survives_exhausted_review_search():
-    # A user-facing question must not be discarded when document search is
-    # exhausted: the remaining gap is a user fact, not a document gap.
+def test_failed_document_review_cannot_be_overridden_by_proposed_question():
+    # The reviewer still needs a clause: a proposed question cannot turn this
+    # document gap into a customer fact gap.
     lm = SimpleNamespace(
         rewrite_query=Mock(return_value='original'),
         analyze_policy=Mock(return_value=dict(
@@ -108,7 +97,33 @@ def test_user_clarification_survives_exhausted_review_search():
         review_evidence=Mock(return_value=SimpleNamespace(sufficient=False, search_queries=['missing clause'])))
     rag = SimpleNamespace(retrieve=Mock(return_value=[{'id':'a'}]))  # no new evidence
     analysis, _ = assess_policy(lm, rag, 'original', [])
-    assert analysis['clarification'] == 'What caused the damage?'
-    assert analysis['needs_review'] is False
+    assert analysis['clarification'] == ''
+    assert analysis['needs_review'] is True
     assert analysis['verdict'] == 'uncertain'
     assert lm.review_evidence.call_count == 1
+
+
+def test_followup_searches_new_facts_even_with_cached_evidence():
+    lm = SimpleNamespace(rewrite_query=Mock(return_value='new incident fact'),
+                         analyze_policy=Mock(return_value=result('excluded')))
+    rag = SimpleNamespace(retrieve=Mock(return_value=[{'id': 'new'}]))
+    _, sources = assess_policy(lm, rag, 'new incident fact', [], initial_sources=[{'id': 'old'}])
+    rag.retrieve.assert_called_once_with('new incident fact')
+    assert {s['id'] for s in sources} == {'old', 'new'}
+
+
+def test_supported_customer_question_follows_retrieval_and_review():
+    stages = []
+    def retrieve(query):
+        stages.append('retrieve')
+        return [{'id': 'a'}]
+    def assess(*args):
+        stages.append('assess')
+        return {**result('uncertain'), 'clarification': 'Where was the item stored?'}
+    def review(*args):
+        stages.append('review')
+        return SimpleNamespace(sufficient=True, search_queries=[])
+    lm = SimpleNamespace(analyze_policy=assess, review_evidence=review)
+    analysis, _ = assess_policy(lm, SimpleNamespace(retrieve=retrieve), 'incident', [], query='incident')
+    assert stages == ['retrieve', 'assess', 'review']
+    assert analysis['clarification'] == 'Where was the item stored?'

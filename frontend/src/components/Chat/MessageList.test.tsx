@@ -17,7 +17,7 @@ describe('MessageList', () => {
         {...noop}
       />,
     );
-    expect(screen.getByText('Covered')).toBeInTheDocument();
+    expect(screen.getByText('Yes')).toBeInTheDocument();
   });
 
   it('routes claim_status to ClaimStatusCard', () => {
@@ -83,13 +83,4 @@ describe('MessageList', () => {
     expect(screen.getByText('Claim not found')).toBeInTheDocument();
   });
 
-  it('renders a user bubble verbatim', () => {
-    render(
-      <MessageList
-        messages={[{ id: 'u1', role: 'user', text: 'Does my policy cover burst pipes?' }]}
-        {...noop}
-      />,
-    );
-    expect(screen.getByText('Does my policy cover burst pipes?')).toBeInTheDocument();
-  });
 });

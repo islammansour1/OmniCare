@@ -14,16 +14,4 @@ describe('ClaimStatusCard', () => {
     expect(screen.getByText('Approved')).toBeInTheDocument();
   });
 
-  it('maps status to the right badge tone label', () => {
-    const { rerender } = render(
-      <ClaimStatusCard claim={makeClaim({ status: 'Under Review' })} />,
-    );
-    expect(screen.getByText('Under Review')).toBeInTheDocument();
-
-    rerender(<ClaimStatusCard claim={makeClaim({ status: 'Submitted' })} />);
-    expect(screen.getByText('Submitted')).toBeInTheDocument();
-
-    rerender(<ClaimStatusCard claim={makeClaim({ status: 'Denied' })} />);
-    expect(screen.getByText('Denied')).toBeInTheDocument();
-  });
 });

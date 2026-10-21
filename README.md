@@ -6,6 +6,15 @@ Every answer is backed by a **hosted** LLM (Google Gemini, native via LangChain)
 There is no local inference anywhere — if the Gemini key is missing, the backend
 fails fast at startup rather than falling back to a demo or offline mode.
 
+## Demo
+
+A two-minute walkthrough of water-damage claims, gradual-leak exclusions,
+personal-property claims, and off-topic questions, recorded from the live UI.
+
+[![Watch the OmniCare demo](docs/assets/omnicare-demo-preview.png)](docs/omnicare-demo.mp4)
+
+[Watch or download the demo](docs/omnicare-demo.mp4) · 1080p · 1 min 56 sec
+
 ## How it works
 
 - **Ownership starts with the browser.** An opaque, HttpOnly, same-site session
@@ -53,6 +62,11 @@ flowchart LR
 ```
 
 ## Why LangGraph
+
+None of this is LangGraph-specific — the same RAG + tool-calling assistant could
+be built with LangChain, CrewAI, ADK, or a plain Python control loop. LangGraph
+just happens to be the framework this workflow fits into most naturally, so it's
+the one used here.
 
 LangGraph was chosen over LangChain chains, CrewAI, and ADK because this
 workflow is a **state machine, not a pipeline**. Coverage decisions branch
@@ -134,6 +148,26 @@ curl -b cookies.txt -X POST http://localhost:8000/api/v1/chat \
 
 `user_id` must match the session owner returned by `/api/v1/session`. Full
 request/response shapes are in [API contracts](docs/CONTRACTS.md).
+
+## Tests
+
+Backend (endpoints, tool calls, RAG retrieval, and prompt-injection safety) runs
+against local test doubles — no API key needed:
+
+```bash
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest -q
+```
+
+Frontend component and unit tests (Vitest):
+
+```bash
+cd frontend
+npm install
+npm run test:run
+```
 
 ## Documentation
 

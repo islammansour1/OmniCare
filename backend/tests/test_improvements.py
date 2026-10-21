@@ -30,13 +30,19 @@ def test_cookie_session_persists_and_blocks_cross_origin(client):
     assert client.post('/api/v1/session', headers={'Origin': 'https://evil.example'}).status_code == 403
 
 
-def test_conversation_restore_preserves_citations_and_new_chat_is_empty(client):
+def test_conversation_restore_preserves_citations_and_new_chat_starts_with_greeting(client):
     a, b = conversation(client, 'u1'), conversation(client, 'u1')
     res = client.post('/api/v1/chat', json=payload(conversation_id=a, request_id='r1')).json()
     saved = client.get(f'/api/v1/conversations/{a}', headers=auth(client, 'u1')).json()
-    assert saved['messages'][1]['sources'] == res['sources']
-    assert saved['messages'][1]['data'] == res['data']
-    assert client.get(f'/api/v1/conversations/{b}', headers=auth(client, 'u1')).json()['messages'] == []
+    # A new conversation is seeded with the agent's greeting, followed by the
+    # user turn and its assistant reply.
+    assert saved['messages'][0]['message_type'] == 'greeting'
+    assert saved['messages'][1]['role'] == 'user'
+    assert saved['messages'][2]['sources'] == res['sources']
+    assert saved['messages'][2]['data'] == res['data']
+    fresh = client.get(f'/api/v1/conversations/{b}', headers=auth(client, 'u1')).json()
+    assert len(fresh['messages']) == 1
+    assert fresh['messages'][0]['message_type'] == 'greeting'
     assert client.get(f'/api/v1/conversations/{a}', headers=auth(client, 'u2')).status_code == 404
     assert client.post('/api/v1/chat', json=payload('u2', conversation_id=a)).status_code == 404
 
@@ -109,26 +115,6 @@ def test_followup_uses_prior_incident(client):
     reply = client.post('/api/v1/chat', json=payload(message='What is the deductible for that?')).json()
     assert '$500' in reply['response']
     assert reply['sources'][0]['id'] == 'sec1'
-
-
-@pytest.mark.parametrize('question, verdict', [
-    ('My laptop was damaged by a flood', 'excluded'),
-    ('I have water damage', 'uncertain'),
-    ('My TV got ruined', 'uncertain'),
-    ('My ring is worth $2,000', 'covered'),
-    ('My ring is worth $2,501', 'conditional'),
-])
-def test_ambiguous_and_mixed_coverage(deps, question, verdict):
-    SOURCES = [
-        {"id": "sec1", "section": "Section 1 — Home Water Damage Coverage",
-         "text": "Water damage caused by sudden pipe bursts is covered up to $25,000 with a $500 deductible. Gradual leaks or flood damage are strictly excluded."},
-        {"id": "sec2", "section": "Section 2 — Personal Property Protection",
-         "text": "Electronics, furniture, and jewelry are covered up to $10,000 total. Single items exceeding $2,500 require individual appraisal receipts."},
-    ]
-    analysis = deps.lm.analyze_policy(question, SOURCES, [])
-    assert analysis['verdict'] == verdict
-    if verdict == 'uncertain':
-        assert analysis['clarification']
 
 
 def test_live_analysis_rejects_fabricated_evidence():

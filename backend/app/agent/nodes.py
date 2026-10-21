@@ -9,7 +9,7 @@ from ..deps import Deps
 from ..observability import log_event
 from ..schemas import ClaimDraft
 from .llm import LLMUnavailableError
-from .retrieval import assess_policy
+from .retrieval import assess_policy, build_policy_graph
 from .state import (
     AgentState,
     build_response,
@@ -43,11 +43,17 @@ def build_route_node(deps: Deps) -> Any:
     return _route
 
 
-def compose_coverage_answer(deps: Deps, question: str, analysis: dict, sources: list[dict]) -> str:
+def compose_coverage_answer(deps: Deps, question: str, analysis: dict, sources: list[dict], history=None) -> str:
     """Presentation cannot change the structured verdict or verified sources."""
+    if analysis.get("policy_context") == "unresolved":
+        # Candidate clauses may guide clarification, but must not become a
+        # customer-facing explanation of an unestablished incident category.
+        analysis = {**analysis, "facts": []}
+        sources = []
     try:
+        options = {"history": history} if history else {}
         answer = deps.lm.compose_answer(question, analysis["verdict"], analysis["facts"],
-                                        [s["section"] for s in sources])
+                                        [s["section"] for s in sources], **options)
     except LLMUnavailableError:
         # Wording failures must not discard a successfully verified assessment.
         answer = ("Here is what the policy says: " + " ".join(analysis["facts"]) if analysis["facts"]
@@ -66,60 +72,130 @@ def load_policy_dialogue(deps, state):
     return {}
 
 
-def assess_turn(deps, state, history):
+def cached_policy_sources(deps, state):
     previous = load_policy_dialogue(deps, state)
     cached = previous.get("evidence", [])
     if cached:
         # Reuse evidence only while it still matches the active policy exactly.
         current = {c.id: c.section + "\n" + c.text for c in deps.rag.get_chunks()}
         cached = [s for s in cached if current.get(s["id"]) == s["text"]]
-    return assess_policy(deps.lm, deps.rag, state["message"], history, initial_sources=cached,
-                         query=state.get("query"))
+    return cached
+
+
+def coverage_already_explained(deps, state) -> bool:
+    """True when a prior turn in this conversation already delivered a coverage
+    answer, so a claim offer should not re-explain coverage from scratch."""
+    for message in deps.db.get_messages(state["user_id"], limit=50):
+        if message.get("role") == "assistant" and message.get("message_type") == "coverage_answer":
+            return True
+    return False
+
+
+def assess_turn(deps, state, history):
+    return assess_policy(deps.lm, deps.rag, state["message"], history,
+                         initial_sources=cached_policy_sources(deps, state), query=state.get("query"))
 
 
 def clarify_or_review(deps, state, analysis, sources):
     previous = {} if analysis.get("starts_new_incident") else load_policy_dialogue(deps, state)
     count = previous.get("questions", 0)
     question = analysis.get("clarification", "").strip()
-    # Two questions per unresolved conversation sequence, including across restarts.
-    # A terminal review message retains the count; another vague reply cannot reset it.
-    if analysis.get("needs_review") or count >= 2 or not question or question.casefold() == previous.get("question", "").casefold():
-        cited_sources = [s for s in sources if s['id'] in analysis['cited_ids']]
+    # Bound stalled exchanges rather than penalizing useful partial answers.
+    # Progress is a semantic assessment of the reply, never keyword matching.
+    progress = analysis.get("clarification_progress", False)
+    stalled = 0 if progress else previous.get("stalled_turns", 0) + bool(previous.get("question"))
+    repeated = question.casefold() == previous.get("question", "").casefold()
+    if (analysis.get("needs_review") or stalled >= 2 or not question
+            or (not progress and (repeated or previous.get("stopped")))):
+        cited_sources = ([] if analysis.get("policy_context") == "unresolved" else
+                         [s for s in sources if s['id'] in analysis['cited_ids']])
         # Stop questioning, not explaining: retain the verified policy terms
         # and let the final writer explain the unresolved distinction.
         terminal = {**analysis, "verdict": "uncertain", "clarification": ""}
-        answer = compose_coverage_answer(deps, state["message"], terminal, cited_sources)
+        answer = compose_coverage_answer(deps, state["message"], terminal, cited_sources, state.get("history", []))
         return build_response(answer, "coverage_answer", data={"answer": answer, "verdict": "uncertain",
-            "policy_dialogue": {"questions": 2, "question": question, "evidence": sources}},
+            "policy_dialogue": {"questions": count, "stalled_turns": stalled, "stopped": True,
+                                "question": question, "evidence": sources}},
             sources=cited_sources)
     try:
-        wording = deps.lm.compose_clarification(state["message"], question, sources, state.get("history", []))
+        wording_sources = ([] if analysis.get("policy_context") == "unresolved" else
+                           [s for s in sources if s["id"] in analysis["cited_ids"]])
+        terms = [] if analysis.get("policy_context") == "unresolved" else analysis.get("clarification_terms", [])
+        # Policy terms can have their own verified source, beyond the verdict's citations.
+        if analysis.get("policy_context") != "unresolved":
+            term_ids = {t["source_id"] for t in terms}
+            wording_sources = [s for s in sources if s["id"] in set(analysis["cited_ids"]) | term_ids]
+        args = (state["message"], question, wording_sources, state.get("history", []))
+        options = {}
+        if terms:
+            options["policy_terms"] = terms
+        if analysis.get("clarification_plan"):
+            options["clarification_plan"] = analysis["clarification_plan"]
+        if options:
+            options["claim_requested"] = analysis.get("claim_requested", False)
+        wording = deps.lm.compose_clarification(*args, **options)
     except LLMUnavailableError:
-        wording = "Could you tell me a little more about what happened?"
+        wording = question
     return build_response(wording, "clarification", data={"question": wording, "missing_fields": [],
-        "policy_dialogue": {"questions": count + 1, "question": question, "evidence": sources}})
+        "policy_dialogue": {"questions": count + 1, "stalled_turns": stalled,
+                            "question": question, "evidence": sources}})
 
 
 def build_coverage_node(deps: Deps) -> Any:
     builder = StateGraph(AgentState)
 
-    def _assess(state: AgentState) -> dict[str, Any]:
-        analysis, sources = assess_turn(deps, state, state.get("history", []))
-        return {"assessment": analysis, "sources": sources}
+    def _prepare(state: AgentState) -> dict[str, Any]:
+        return {"initial_sources": cached_policy_sources(deps, state)}
+
+    def _clarify(state: AgentState) -> dict[str, Any]:
+        return {"result": clarify_or_review(deps, state, state["assessment"], state["sources"])}
+
+    def _offer_claim(state: AgentState) -> dict[str, Any]:
+        analysis = state["assessment"]
+        sources = state["sources"]
+        cited = [s for s in sources if s["id"] in analysis.get("cited_ids", [])]
+        try:
+            question = deps.lm.compose_claim_offer(state["message"], state.get("history", []))
+        except LLMUnavailableError:
+            question = "Would you like to start a claim?"
+        if not coverage_already_explained(deps, state):
+            # The customer has not yet been told what their policy says. Explain
+            # it with citations first, then offer the next step — never skip the
+            # explanation straight to the offer.
+            answer = compose_coverage_answer(deps, state["message"], analysis, cited, state.get("history", []))
+            full = (answer + " " + question).strip()
+            return {"result": build_response(
+                response=full,
+                message_type="coverage_answer",
+                data={"answer": full, "verdict": analysis["verdict"], "claim_offer": True},
+                sources=cited,
+            )}
+        return {"result": build_response(question, "clarification", data={
+            "question": question, "missing_fields": [], "claim_offer": True})}
+
+    def _draft_claim(state: AgentState) -> dict[str, Any]:
+        return build_claim_submit_node(deps, assessment=(state["assessment"], state["sources"])).invoke(state)
+
+    def _next_step(state: AgentState) -> str:
+        analysis = state["assessment"]
+        if analysis["verdict"] == "uncertain":
+            return "clarify"
+        if analysis["verdict"] in ("covered", "conditional"):
+            if analysis.get("claim_requested"):
+                return "draft_claim"
+            if analysis.get("offer_claim"):
+                return "offer_claim"
+        return "compose"
 
     def _compose(state: AgentState) -> dict[str, Any]:
         question = state["message"]
         analysis = state["assessment"]
         sources = state["sources"]
-        if analysis["verdict"] == "uncertain":
-            return {"result": clarify_or_review(deps, state, analysis, sources)}
-        if analysis["verdict"] in ("covered", "conditional") and analysis.get("claim_requested"):
-            return build_claim_submit_node(deps, assessment=(analysis, sources)).invoke(state)
         verdict = analysis["verdict"]
         facts = analysis["facts"]
         cited_ids = set(analysis["cited_ids"])
         cited_sources = [s for s in sources if s["id"] in cited_ids]
-        answer = compose_coverage_answer(deps, question, analysis, cited_sources)
+        answer = compose_coverage_answer(deps, question, analysis, cited_sources, state.get("history", []))
 
         log_event("agent.coverage", verdict=verdict, source_ids=list(cited_ids))
         return {
@@ -131,16 +207,36 @@ def build_coverage_node(deps: Deps) -> Any:
             )
         }
 
-    builder.add_node("assess", _assess)
+    builder.add_node("prepare", _prepare)
+    builder.add_node("policy_assessment", build_policy_graph(deps.lm, deps.rag))
+    builder.add_node("clarify", _clarify)
+    builder.add_node("offer_claim", _offer_claim)
+    builder.add_node("draft_claim", _draft_claim)
     builder.add_node("compose", _compose)
-    builder.add_edge(START, "assess")
-    builder.add_edge("assess", "compose")
+    builder.add_edge(START, "prepare")
+    builder.add_edge("prepare", "policy_assessment")
+    builder.add_conditional_edges(
+        "policy_assessment", _next_step,
+        ["clarify", "offer_claim", "draft_claim", "compose"],
+    )
+    builder.add_edge("clarify", END)
+    builder.add_edge("offer_claim", END)
+    builder.add_edge("draft_claim", END)
     builder.add_edge("compose", END)
     return builder.compile(name="coverage")
 
 
 def find_referenced_claim_id(state: AgentState, deps: Deps) -> str | None:
     return deps.lm.resolve_claim_id(state["message"], state.get("history", []))
+
+
+def format_claim_status_overview(claim: dict[str, Any]) -> str:
+    """A quick, natural-language summary of a single claim's current status."""
+    return (
+        f"Your {claim['claim_type']} claim ({claim['claim_id']}) under policy "
+        f"{claim['policy_number']} is {claim['status'].lower()}, with an amount "
+        f"of ${claim['amount']:,.2f}."
+    )
 
 
 def build_claim_status_node(deps: Deps, interactive: bool = True) -> Any:
@@ -161,20 +257,22 @@ def build_claim_status_node(deps: Deps, interactive: bool = True) -> Any:
                                      "result": matches}])}
                 if len(matches) == 1:
                     c = matches[0]
-                    response = f"Claim {c['claim_id']} is {c['status'].lower()} — {c['claim_type']} for {c['policy_number']} ({c['amount']:.2f})."
+                    response = format_claim_status_overview(c)
                     return {"result": build_response(
                         response=response,
                         message_type="claim_status", data={"claim": c},
                         tool_calls=[{"name": "get_claim_status", "arguments": {"claim_id": c["claim_id"]},
                                      "result": c}])}
-                response = f"I found {len(matches)} claims. " + " ".join(f"Claim {c['claim_id']} is {c['status'].lower()}." for c in matches)
+                response = f"I found {len(matches)} claims. " + " ".join(
+                    f"Your {c['claim_type']} claim {c['claim_id']} is {c['status'].lower()}." for c in matches)
                 return {"result": build_response(
                     response=response,
                     message_type="chat", data={"claims": matches},
                     tool_calls=[{"name": "search_claims", "arguments": {"query": state["message"]},
                                  "result": matches}])}
             return {"result": build_response(
-                response="Here are the matching claims. Select one to see its status." if matches else "I couldn't find a matching claim in this session. Try a different description or a claim ID.",
+                response=("Here are the matching claims — pick one and I'll show you its status."
+                          if matches else "I couldn't find a matching claim here. Try a different description or the claim ID."),
                 message_type="claim_list", data={"claims": matches},
                 tool_calls=[{"name": "search_claims", "arguments": {"query": state["message"]},
                              "result": matches}])}
@@ -199,11 +297,7 @@ def build_claim_status_node(deps: Deps, interactive: bool = True) -> Any:
         log_event("agent.claim_status", claim_id=cid)
         return {
             "result": build_response(
-                response=(
-                    f"Claim {claim['claim_id']} is {claim['status'].lower()} — "
-                    f"{claim['claim_type']} for {claim['policy_number']} "
-                    f"({claim['amount']:.2f})."
-                ),
+                response=format_claim_status_overview(claim),
                 message_type="claim_status",
                 data={"claim": claim},
                 tool_calls=[
@@ -238,7 +332,7 @@ def check_coverage_gate(
         return None
     cited = set(analysis["cited_ids"])
     cited_sources = [s for s in sources if s["id"] in cited]
-    answer = compose_coverage_answer(deps, incident, analysis, cited_sources)
+    answer = compose_coverage_answer(deps, incident, analysis, cited_sources, history)
     log_event("agent.claim_gate", verdict=verdict, source_ids=list(cited))
     return build_response(
         response=answer,
@@ -294,7 +388,7 @@ def build_claim_submit_node(deps: Deps, assessment=None, interactive: bool = Tru
         missing = missing_claim_fields(merged)
         analysis, sources = state["assessment"], state["sources"]
         cited_sources = [s for s in sources if s['id'] in analysis['cited_ids']]
-        response = compose_coverage_answer(deps, state["message"], analysis, cited_sources)
+        response = compose_coverage_answer(deps, state["message"], analysis, cited_sources, state.get("context", []))
         response += " You can complete and review the claim details below. Submitting a claim does not guarantee payment."
         log_event("agent.claim_draft", missing=missing)
         draft_result = build_response(
@@ -476,22 +570,25 @@ def build_cancel_node(deps: Deps) -> Any:
     return _cancel
 
 
+def greeting_response() -> dict[str, Any]:
+    """The assistant's opening greeting for a brand-new conversation."""
+    return build_response(
+        response=(
+            "Hi, I'm OmniCare's assistant. I can answer questions about your "
+            "policy, track a claim, or help you file a new claim. How can I help?"
+        ),
+        message_type="greeting",
+        data={
+            "text": "How can I help you today?",
+            "suggestions": ["Ask about coverage", "Track a claim", "File a claim"],
+        },
+    )
+
+
 def build_chitchat_node(deps: Deps) -> Any:
     def _chitchat(state: AgentState) -> dict[str, Any]:
         if not state.get("history"):
-            return {
-                "result": build_response(
-                    response=(
-                        "Hi, I'm OmniCare's assistant. I can answer questions about your "
-                        "policy, track a claim, or help you file a new claim. How can I help?"
-                    ),
-                    message_type="greeting",
-                    data={
-                        "text": "How can I help you today?",
-                        "suggestions": ["Ask about coverage", "Track a claim", "File a claim"],
-                    },
-                )
-            }
+            return {"result": greeting_response()}
         return {
             "result": build_response(
                 response="Happy to help. Ask me about coverage, tracking a claim, or filing a new claim.",

@@ -84,6 +84,67 @@ or converted into a claim draft. Confirmation never re-derives authorization fro
 the model — it re-runs the coverage gate and then performs deterministic
 validation, idempotent submission, and persistence.
 
+Policy clarification is retrieval-first, including vague incident reports. The model
+uses the retrieved terms and conversation to identify a fact that could change the
+answer; there is no fixed incident questionnaire. An evidence review must support
+that distinction before the customer is asked. Missing document evidence triggers
+bounded additional retrieval, and an unresolved document gap ends in uncertainty
+rather than a customer question. Each follow-up searches the current facts while
+retaining valid previous evidence. Clarification wording stays open and neutral;
+urgency or a request for repairs alone does not establish intent to file a claim.
+The structured assessment also distinguishes established policy context, unresolved
+incident context, and general policy questions. Search matches alone cannot
+establish an incident category. When context is unresolved, candidate clauses stay
+internal: neither clarification wording nor terminal uncertainty summaries receive
+their terms, and they are not displayed as incident citations.
+The model also reports whether a clarification reply adds a useful new fact or
+correction. A structured clarification plan records known facts, the missing fact,
+and whether to ask an open question, offer policy options, or ask for an observation.
+Follow-ups narrow the remaining gap using observable details. Two
+consecutive replies without progress stop questioning; useful partial answers
+reset that counter. These counters and the stopped state persist across restarts.
+
+## Policy decision graph
+
+Coverage embeds a compiled `policy_assessment` subgraph. Claims and confirmation
+use the same subgraph through `assess_policy`; there is no separate Python search
+loop. The routing call supplies the rewritten query, and the subgraph rewrites
+only when no prepared query is available. Retrieval searches that query;
+assessment receives the original message and conversation so rewriting cannot
+replace the customer's facts.
+
+```mermaid
+flowchart LR
+    P[Prepare conversation evidence] --> W[Rewrite query]
+    W --> R[Retrieve policy]
+    R --> A[Assess evidence and customer facts]
+    A -->|Document gap| R
+    A -->|Customer fact gap| V[Review evidence]
+    V -->|Missing clauses| R
+    V -->|Enough policy evidence| C[Clarify using policy terms]
+    A -->|Enough information| O[Answer]
+    A -->|Eligible incident and practical help| F[Offer claim]
+    F -->|Customer accepts on next turn| W
+    A -->|Claim requested and eligible| D[Draft review form]
+    D --> H[Explicit confirmation before submission]
+    R -->|No new evidence / budget exhausted| U[Explain uncertainty]
+    C -->|Customer replies: next turn| W
+```
+
+Coverage's conditional edge also distinguishes answering a policy question,
+offering a claim, and drafting a claim. `offer_claim` is an invitation selected
+from conversation context after an eligible incident; `claim_requested` indicates
+the customer wants a draft. Code gates both branches on an eligible verdict. A
+claim offer is a `clarification` response with `data.claim_offer=true`; acceptance
+is interpreted in the next turn and opens the existing review form. It does not
+write a claim. The form still requires explicit structured confirmation.
+
+The assessment selects operative clarification terms as exact source spans with
+source IDs. Code verifies those spans. The wording model writes the language
+around them; code inserts the terms verbatim and sends the completed question to
+the client after validation. This applies to arbitrary policy subjects without
+hardcoded categories or sample-policy phrases.
+
 ## Components
 
 | Module | Responsibility |

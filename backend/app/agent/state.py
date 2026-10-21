@@ -20,6 +20,7 @@ class AgentState(TypedDict, total=False):
     # (``AgentInput`` below excludes them, so Studio's input form ignores them).
     assessment: dict[str, Any] | None
     sources: list[dict[str, Any]]
+    initial_sources: list[dict[str, Any]]
     context: list[dict[str, str]]
     existing: dict[str, Any] | None
     extracted: dict[str, Any] | None

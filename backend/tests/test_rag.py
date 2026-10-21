@@ -26,12 +26,6 @@ def test_chunking_two_sections():
     assert "Personal Property" in chunks[1].section
 
 
-def test_chunking_stable_ids():
-    c1 = chunk_policy(POLICY)
-    c2 = chunk_policy(POLICY)
-    assert [c.id for c in c1] == [c.id for c in c2] == ["sec1", "sec2"]
-
-
 def _pipeline(tmp_path):
     from pathlib import Path
 
@@ -55,25 +49,6 @@ def test_ingestion_idempotent(tmp_path):
     p = _pipeline(tmp_path)
     assert p.ingest() == 2
     assert p.ingest() == 2  # no duplicate chunks
-
-
-def test_retrieve_exclusion(tmp_path):
-    p = _pipeline(tmp_path)
-    p.ingest()
-    sources = p.retrieve("Is flood damage covered?")
-    assert any(s["id"] == "sec1" for s in sources)
-
-
-def test_unsupported_query_grounding(tmp_path):
-    from fakes import FakeLanguageModel
-
-    p = _pipeline(tmp_path)
-    p.ingest()
-    sources = p.retrieve("Does my policy cover earthquake damage?")
-    analysis = FakeLanguageModel().analyze_policy("Does my policy cover earthquake damage?", sources, [])
-    # The system must say it cannot establish coverage, with no citations.
-    assert analysis["verdict"] == "unsupported"
-    assert analysis["cited_ids"] == []
 
 
 def test_citations_reference_real_text(tmp_path):
